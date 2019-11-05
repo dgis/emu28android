@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main_screen_container"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:background="#00808080">
+
+    <ImageButton
+        android:id="@+id/button_menu"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:background="@android:color/transparent"
+        android:src="@drawable/ic_more_vert_black_24dp"
+        android:contentDescription="@string/button_main_menu_content_description" />
+</FrameLayout>

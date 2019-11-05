@@ -1,0 +1,4 @@
+#ifndef TRUNK_SHELLAPI_H
+#define TRUNK_SHELLAPI_H
+
+#endif //TRUNK_SHELLAPI_H

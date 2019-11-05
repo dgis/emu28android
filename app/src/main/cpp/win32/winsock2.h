@@ -1,0 +1,4 @@
+#ifndef TRUNK_WINSOCK2_H
+#define TRUNK_WINSOCK2_H
+
+#endif //TRUNK_WINSOCK2_H
