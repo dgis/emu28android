@@ -3,7 +3,7 @@ DESCRIPTION
 This project ports the Windows application Emu28 written in C to Android.
 It uses the Android NDK. The former Emu28 source code (written by Christoph Giesselink) remains untouched because of a thin win32 emulation layer above Linux/NDK!
 This win32 layer will allow to easily update from the original Emu28 source code.
-It can open or save the exact same state files (state.e??) than the original Windows application!
+It can open or save the exact same state files (state.e28) than the original Windows application!
 
 This application does NOT come with the ROM files!
 You will need KML scripts and ROM files already copied into your Android filesystem.
@@ -43,9 +43,9 @@ NOT WORKING YET
 
 CHANGES
 
-Version 1.0 (2019-06-05)
+Version 1.0 (2019-11-23)
 
-- First public version available. It is based on Emu28 version 1.23 from Christoph Gießelink.
+- First public version available. It is based on Emu28 version 1.33 from Christoph Gießelink.
 
 
 LICENSES
