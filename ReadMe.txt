@@ -43,7 +43,7 @@ NOT WORKING YET
 
 CHANGES
 
-Version 1.0 (2019-11-23)
+Version 1.0beta2 (2019-11-28)
 
 - First public version available. It is based on Emu28 version 1.33 from Christoph Gießelink.
 
