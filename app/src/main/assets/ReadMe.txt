@@ -44,6 +44,21 @@ NOT WORKING YET
 
 CHANGES
 
+Version 1.1 (2020-05-24)
+
+- Intercept the ESC keyboard key to allow the use of the BACK soft key.
+- Add LCD pixel borders.
+- Add support for the dark theme.
+- Remove the non loadable file from the MRU file list.
+- Fix: Overlapping window source position when Background/Offset is not (0,0).
+- Wrap the table of content in the former help documentation.
+- Save the settings at the end of the state file.
+- Transform all child activities with dialog fragments (to prevent unwanted state save).
+- Fix an issue with the numpad keys which send the arrow keys and the numbers at the same time.
+- Fix a major issue which prevented to open a state file (with a custom KML script) with Android 10.
+- Optimize the speed with -Ofast option.
+
+
 Version 1.0 (2019-12-12)
 
 - First public version available. It is based on Emu28 version 1.33 from Christoph Gießelink.
