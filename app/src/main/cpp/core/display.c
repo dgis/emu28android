@@ -149,7 +149,7 @@ VOID UpdateContrast(BYTE byContrast)
 		GdiFlush();
 	}
 	LeaveCriticalSection(&csGDILock);
-	UpdateAnnunciators();					// adjust annunciator color
+	UpdateAnnunciators(0x7F);				// adjust annunciator color
 	return;
 }
 
@@ -572,7 +572,7 @@ VOID UpdateMainDisplay(VOID)
 	return;
 }
 
-VOID UpdateAnnunciators(VOID)
+VOID UpdateAnnunciators(DWORD dwUpdateMask)
 {
 	const DWORD dwAnnAddr[] = { SLA_HALT, SLA_SHIFT, SLA_ALPHA, SLA_BUSY, SLA_BAT, SLA_RAD, SLA_PRINTER };
 
@@ -581,28 +581,33 @@ VOID UpdateAnnunciators(VOID)
 	BOOL bAnnOn = (Chipset.IORamM[DSPCTL] & DON) != 0 && (Chipset.IORamS[DSPCTL] & DON) != 0;
 
 	// check all annuncators
-	for (i = 0; i < ARRAYSIZEOF(dwAnnAddr);)
+	for (i = 0; i < ARRAYSIZEOF(dwAnnAddr); ++i)
 	{
-		nCount = 0;
-
-		if (bAnnOn)							// annunciators on
+		if ((dwUpdateMask & 0x1) != 0)
 		{
-			DWORD dwAnn = Npack(Chipset.IORamS+dwAnnAddr[i],8) ^ Npack(&Chipset.IORamS[SLA_ALL],8);
+			nCount = 0;
 
-			// count the number of set bits
-			for (;dwAnn != 0; ++nCount)
+			if (bAnnOn)						// annunciators on
 			{
-				dwAnn &= (dwAnn - 1);
+				DWORD dwAnn = Npack(Chipset.IORamS+dwAnnAddr[i],8) ^ Npack(&Chipset.IORamS[SLA_ALL],8);
+
+				// count the number of set bits
+				for (;dwAnn != 0; ++nCount)
+				{
+					dwAnn &= (dwAnn - 1);
+				}
 			}
+
+			// contrast table entry of annunciator
+			j = Chipset.contrast + nCount - 19;
+			if (j < 0)   j = 0;
+			if (j >= 31) j = 31;
+
+			DrawAnnunciator(i+1, nCount > 0 && dwKMLColor[j] != I, dwKMLColor[j]);
 		}
-
-		// contrast table entry of annunciator
-		j = Chipset.contrast + nCount - 19;
-		if (j < 0)   j = 0;
-		if (j >= 31) j = 31;
-
-		DrawAnnunciator(++i, nCount > 0 && dwKMLColor[j] != I, dwKMLColor[j]);
+		dwUpdateMask >>= 1;
 	}
+	_ASSERT(dwUpdateMask == 0);
 	return;
 }
 
@@ -631,7 +636,7 @@ VOID StartDisplay(VOID)
 
 	if (Chipset.IORamM[DSPCTL]&DON)			// display on?
 	{
-		UpdateAnnunciators();				// switch on annunciators
+		UpdateAnnunciators(0x7F);			// switch on annunciators
 		VERIFY(uLcdTimerId = timeSetEvent(DISPLAY_FREQ,0,(LPTIMECALLBACK)&LcdProc,0,TIME_PERIODIC));
 	}
 	return;

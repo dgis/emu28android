@@ -517,7 +517,7 @@ loop:
 			Map(0x00,ARRAYSIZEOF(RMap)-1);	// update memory mapping
 			UpdateContrast(Chipset.contrast);
 			UpdateMainDisplay();
-			UpdateAnnunciators();
+			UpdateAnnunciators(0x7F);
 			// init speed reference
 			dwOldCyc = (DWORD) (Chipset.cycles & 0xFFFFFFFF);
 			QueryPerformanceCounter(&lDummyInt);

@@ -47,6 +47,7 @@ static UINT      nButtons = 0;
 static UINT      nScancodes = 0;
 static UINT      nAnnunciators = 0;
 static BOOL      bDebug = TRUE;
+static BOOL      bBitmapROM = FALSE;
 static WORD      wKeybLocId = 0;
 static BOOL      bLocaleInc = FALSE;		// no locale block content included
 static UINT      nLexLine;
@@ -894,6 +895,8 @@ static KmlLine* ParseLines(BOOL bInclude)
 		if (eToken == TOK_INCLUDE)
 		{
 			LPTSTR szFilename;
+			UINT   nLexLineKml;
+
 			eToken = Lex(LEX_PARAM);		// get include parameter in 'szLexString'
 			if (eToken != TOK_STRING)		// not a string (token don't begin with ")
 			{
@@ -902,6 +905,7 @@ static KmlLine* ParseLines(BOOL bInclude)
 			}
 			szFilename = szLexString;		// save pointer to allocated memory
 			szLexString = NULL;
+			nLexLineKml = nLexLine;			// save line number
 			eToken = Lex(LEX_PARAM);		// decode argument
 			if (eToken != TOK_EOL)
 			{
@@ -924,7 +928,10 @@ static KmlLine* ParseLines(BOOL bInclude)
 			}
 			free(szFilename);				// free filename string
 			if (pLine == NULL)				// parsing error
+			{
+				nLexLine = nLexLineKml;		// restore line number
 				goto abort;
+			}
 			while (pLine->pNext) pLine=pLine->pNext;
 			continue;
 		}
@@ -1095,6 +1102,8 @@ static KmlBlock* ParseBlocks(BOOL bInclude, BOOL bEndTokenEn)
 		if (eToken == TOK_INCLUDE)
 		{
 			LPTSTR szFilename;
+			UINT   nLexLineKml;
+
 			eToken = Lex(LEX_PARAM);		// get include parameter in 'szLexString'
 			if (eToken != TOK_STRING)		// not a string (token don't begin with ")
 			{
@@ -1103,6 +1112,7 @@ static KmlBlock* ParseBlocks(BOOL bInclude, BOOL bEndTokenEn)
 			}
 			szFilename = szLexString;		// save pointer to allocated memory
 			szLexString = NULL;
+			nLexLineKml = nLexLine;			// save line number
 			eToken = Lex(LEX_PARAM);		// decode argument
 			if (eToken != TOK_EOL)
 			{
@@ -1116,7 +1126,10 @@ static KmlBlock* ParseBlocks(BOOL bInclude, BOOL bEndTokenEn)
 				pBlock = pFirst = IncludeBlocks(bInclude,szFilename);
 			free(szFilename);				// free filename string
 			if (pBlock == NULL)				// parsing error
+			{
+				nLexLine = nLexLineKml;		// restore line number
 				goto abort;
+			}
 			while (pBlock->pNext) pBlock = pBlock->pNext;
 			continue;
 		}
@@ -1262,11 +1275,32 @@ static VOID InitGlobal(KmlBlock* pBlock)
 		case TOK_ROM:
 			if (pbyRom != NULL)
 			{
-				PrintfToLog(_T("Rom %s ignored."), (LPTSTR)pLine->nParam[0]);
-				AddToLog(_T("Please put only one Rom command in the Global block."));
-				break;
+				if (bBitmapROM)				// loaded ROM from background bitmap
+				{
+					UnmapRom();				// ignore this ROM
+				}
+				else
+				{
+					PrintfToLog(_T("Rom %s ignored."), (LPTSTR)pLine->nParam[0]);
+					AddToLog(_T("Please put only one Rom command in the Global block."));
+					break;
+				}
 			}
-			if (!MapRom((LPTSTR)pLine->nParam[0]))
+			_ASSERT(pbyRom == NULL);
+
+			// try to load as ROM image bitmap
+			{
+				// use LoadBitmapFile() for decoding BMP and PNG images
+				HBITMAP hBmp = LoadBitmapFile((LPTSTR)pLine->nParam[0],FALSE);
+				if (hBmp != NULL)
+				{
+					MapRomBmp(hBmp);		// look for an integrated ROM image
+					DeleteObject(hBmp);
+				}
+			}
+
+			// load as normal ROM image file
+			if (pbyRom == NULL && !MapRom((LPTSTR)pLine->nParam[0]))
 			{
 				PrintfToLog(_T("Cannot open Rom %s."), (LPTSTR)pLine->nParam[0]);
 				break;
@@ -1298,6 +1332,11 @@ static VOID InitGlobal(KmlBlock* pBlock)
 				break;
 			}
 			PrintfToLog(_T("Bitmap %s loaded."), (LPTSTR)pLine->nParam[0]);
+			if (pbyRom == NULL)				// no ROM image loaded so far
+			{
+				// look for an integrated ROM image
+				bBitmapROM = MapRomBmp((HBITMAP)GetCurrentObject(hMainDC,OBJ_BITMAP));
+			}
 			break;
 		case TOK_COLOR:
 			dwTColorTol = (DWORD) pLine->nParam[0];
@@ -1697,6 +1736,7 @@ VOID KillKML(VOID)
 	nScancodes = 0;
 	nAnnunciators = 0;
 	bDebug = TRUE;
+	bBitmapROM = FALSE;
 	wKeybLocId = 0;
 	bLocaleInc = FALSE;
 	nKMLFlags = 0;
@@ -1800,7 +1840,7 @@ static VOID AdjustPixel(LPBYTE pbyPixel, BYTE byOffset)
 {
 	INT i = 3;								// BGR colors
 
-	while (--i >= 0)					
+	while (--i >= 0)
 	{
 		WORD wColor = (WORD) *pbyPixel + byOffset;
 		// jumpless saturation to 0xFF
@@ -2699,9 +2739,8 @@ BOOL InitKML(LPCTSTR szFilename, BOOL bNoLog)
 	}
 	if (CheckForBeepPatch())				// check if ROM contain beep patches
 	{
-		AddToLog(_T("Warning, ROM beep patch detected. Remove beep patches please."));
-		bNoLog = FALSE;
-		bAlwaysDisplayLog = TRUE;
+		AddToLog(_T("Error, ROM beep patch detected. Remove beep patches please."));
+		goto quit;
 	}
 
 	ResizeMainBitmap(nScaleMul,nScaleDiv);	// resize main picture

@@ -685,7 +685,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("*/*");
-            intent.putExtra(Intent.EXTRA_TITLE, getString(R.string.filename) + "-state.e28");
+            intent.putExtra(Intent.EXTRA_TITLE, getString(R.string.filename) + "-state.e28c");
             startActivityForResult(intent, INTENT_GETOPENFILENAME);
         });
     }
@@ -697,13 +697,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         int model = NativeLib.getCurrentModel();
-        String extension = "e28";
+        String extension = "e28c";
         switch (model) {
             case 'C': // HP18C # Champion
                 extension = "e18";
                 break;
             case 'P': // HP28C # Paladin
-                extension = "e28";
+                extension = "e28c";
                 break;
         }
         intent.putExtra(Intent.EXTRA_TITLE, getString(R.string.filename) + "-state." + extension);

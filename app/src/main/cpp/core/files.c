@@ -12,6 +12,7 @@
 #include "io.h"								// I/O register definitions
 #include "kml.h"
 #include "debugger.h"
+#include "stegano.h"
 #include "lodepng.h"
 
 #pragma intrinsic(abs,labs)
@@ -384,6 +385,22 @@ BOOL PatchRom(LPCTSTR szFilename)
 //#
 //################
 
+// lodepng allocators
+void* lodepng_malloc(size_t size)
+{
+  return malloc(size);
+}
+
+void* lodepng_realloc(void* ptr, size_t new_size)
+{
+  return realloc(ptr, new_size);
+}
+
+void lodepng_free(void* ptr)
+{
+  free(ptr);
+}
+
 BOOL CrcRom(WORD *pwChk)					// calculate fingerprint of ROM
 {
 	DWORD *pdwData,dwSize;
@@ -504,6 +521,47 @@ BOOL MapRom(LPCTSTR szFilename)
 		}
 	}
 	return TRUE;
+}
+
+BOOL MapRomBmp(HBITMAP hBmp)
+{
+	// look for an integrated ROM image
+	BOOL bBitmapROM = SteganoDecodeHBm(&pbyRom,&dwRomSize,8,hBmp) == STG_NOERROR;
+
+	if (bBitmapROM)							// has data inside
+	{
+		DWORD dwSrc,dwDest;
+		unsigned uError;
+
+		LPBYTE pbyOutData = NULL;
+		size_t nOutData = 0;
+
+		// try to decompress data
+		uError = lodepng_zlib_decompress(&pbyOutData,&nOutData,pbyRom,dwRomSize,
+										 &lodepng_default_decompress_settings);
+
+		if (uError == 0)					// data decompression successful
+		{
+			free(pbyRom);					// free compressed data
+			pbyRom = pbyOutData;			// use decompressed instead
+			dwRomSize = (DWORD) nOutData;
+		}
+
+		dwSrc = dwRomSize;					// source start address
+
+		dwRomSize *= 2;						// unpacked ROM image has double size
+		pbyRom = (LPBYTE) realloc(pbyRom,dwRomSize);
+
+		dwDest = dwRomSize;					// destination start address
+		while (dwSrc > 0)					// unpack source
+		{
+			BYTE byValue = pbyRom[--dwSrc];
+			_ASSERT(dwDest >= 2);
+			pbyRom[--dwDest] = byValue >> 4;
+			pbyRom[--dwDest] = byValue & 0xF;
+		}
+	}
+	return bBitmapROM;
 }
 
 VOID UnmapRom(VOID)
@@ -643,10 +701,18 @@ BOOL OpenDocument(LPCTSTR szFilename)
 		}
 	}
 
-	// read length of KML script name
+	// read length of KML script name, no script name characters to skip
 	ReadFile(hFile,&nLength,sizeof(nLength),&lBytesRead,NULL);
+
 	// KML script name too long for file buffer
-	if (nLength >= ARRAYSIZEOF(szCurrentKml)) goto read_err;
+	if (nLength >= ARRAYSIZEOF(szCurrentKml))
+	{
+		// skip heading KML script name characters until remainder fits into file buffer
+		UINT nSkip = nLength - (ARRAYSIZEOF(szCurrentKml) - 1);
+		SetFilePointer(hFile, nSkip, NULL, FILE_CURRENT);
+
+		nLength = ARRAYSIZEOF(szCurrentKml) - 1;
+	}
 	#if defined _UNICODE
 	{
 		LPSTR szTmp = (LPSTR) malloc(nLength);
@@ -964,9 +1030,9 @@ BOOL GetOpenFilename(VOID)
 
 	InitializeOFN(&ofn);
 	ofn.lpstrFilter =
-		_T("Emu28 Files (*.e18;*.e28)\0*.e18;*.e28\0")
+		_T("Emu28 Files (*.e18;*.e28;*.e28c)\0*.e18;*.e28;*.e28c\0")
 		_T("HP-18C Files (*.e18)\0*.e18\0")
-		_T("HP-28C Files (*.e28)\0*.e28\0")
+		_T("HP-28C Files (*.e28;*.e28c)\0*.e28;*.e28c\0")
 		_T("All Files (*.*)\0*.*\0");
 	ofn.nFilterIndex = 1;					// default
 	ofn.lpstrFile = szBuffer;
@@ -984,20 +1050,23 @@ BOOL GetSaveAsFilename(VOID)
 	TCHAR szBuffer[ARRAYSIZEOF(szBufferFilename)];
 	OPENFILENAME ofn;
 
+	LPCTSTR lpstrDefExt = NULL;
+	
 	InitializeOFN(&ofn);
 	ofn.lpstrFilter =
 		_T("HP-18C Files (*.e18)\0*.e18\0")
-		_T("HP-28C Files (*.e28)\0*.e28\0")
+		_T("HP-28C Files (*.e28;*.e28c)\0*.e28;*.e28c\0")
 		_T("All Files (*.*)\0*.*\0");
 	ofn.nFilterIndex = 3;					// default
+	ofn.lpstrDefExt = NULL;
 	if (cCurrentRomType == 'C')				// Champion, HP18C
 	{
-		ofn.lpstrDefExt = _T("e18");
+		lpstrDefExt = _T("e18");
 		ofn.nFilterIndex = 1;
 	}
 	if (cCurrentRomType == 'P')				// Paladin, HP28C
 	{
-		ofn.lpstrDefExt = _T("e28");
+		lpstrDefExt = _T("e28c");
 		ofn.nFilterIndex = 2;
 	}
 	ofn.lpstrFile = szBuffer;
@@ -1007,6 +1076,20 @@ BOOL GetSaveAsFilename(VOID)
 	if (GetSaveFileName(&ofn) == FALSE) return FALSE;
 	_ASSERT(ARRAYSIZEOF(szBufferFilename) == ofn.nMaxFile);
 	lstrcpy(szBufferFilename, ofn.lpstrFile);
+	// given filename has no file extension
+	if (lpstrDefExt && ofn.nFileExtension == 0)
+	{
+		// actual name length
+		UINT nLength = lstrlen(szBufferFilename);
+
+		// destination buffer has room for the default extension
+		if (nLength + 1 + lstrlen(lpstrDefExt) < ARRAYSIZEOF(szBufferFilename))
+		{
+			// add default extension
+			szBufferFilename[nLength++] = _T('.');
+			lstrcpy(&szBufferFilename[nLength], lpstrDefExt);
+		}
+	}
 	return TRUE;
 }
 

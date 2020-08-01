@@ -49,14 +49,14 @@ typedef struct
 	BOOL	intd;							// keyboard interrupt pending (TRUE = int pending)
 	BOOL	carry;
 
-	BOOL	bShutdnWake;					// flag for wake up from SHUTDN mode
-
 #if defined _USRDLL							// DLL version
 	QWORD	cycles;							// oscillator cycles
 #else										// EXE version
 	DWORD	cycles;							// oscillator cycles
 	DWORD	cycles_reserved;				// reserved for MSB of oscillator cycles
 #endif
+
+	BOOL	bShutdnWake;					// flag for wake up from SHUTDN mode
 
 	WORD	wRomCrc;						// fingerprint of ROM
 

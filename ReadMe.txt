@@ -7,7 +7,7 @@ It can open or save the exact same state files (state.e28) than the original Win
 
 This application does NOT come with the ROM files!
 You will need KML scripts and ROM files already copied into your Android filesystem.
-You can download the KML scripts here: http://regis.cosnier.free.fr/soft/androidEmu28/Emu28-KML-original.zip
+You can download the KML scripts here: http://regis.cosnier.free.fr/soft/androidEmu28/Emu28-KML-original-134.zip
 Or you can download the KML scripts from the original Emu28 Windows application archive (https://hp.giesselink.com/emu28.htm)
 and you can extract the ROM file from a real calculator (or be lucky on internet).
 Be careful about the case sensitivity of the filename in the KML script (Linux is case sensitive, not Windows).
@@ -44,6 +44,11 @@ NOT WORKING YET
 
 CHANGES
 
+Version 1.2 (2020-XX-XX)
+
+- It is based on Emu28 version 1.34 from Christoph Gießelink.
+
+
 Version 1.1 (2020-05-24)
 
 - Intercept the ESC keyboard key to allow the use of the BACK soft key.
@@ -77,14 +82,14 @@ You should have received a copy of the GNU General Public License along with thi
 
 TODO
 
+- Impossible to turn the calculator on after switch off.
 - Try to include the KML files without the ROMs.
 - Sometimes, the calculator seems to lag and finally freeze.
-- Anyway that the layout settings (zoom mode, fill screen...) be part of the saved state, rather than being global to the app (Vincent Weber).
 
 
 BUILD
 
-Emu28 for Android is built with Android Studio 3.4 (2019).
+Emu28 for Android is built with Android Studio 4.0 (2020).
 And to generate an installable APK file with a real Android device, it MUST be signed.
 
 Either use Android Studio:

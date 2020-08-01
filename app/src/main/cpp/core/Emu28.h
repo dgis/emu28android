@@ -163,12 +163,12 @@ extern BOOL  CreateAnnunBitmap(LPCTSTR szFilename);
 extern VOID  SetAnnunBitmap(HDC hDC, HBITMAP hBitmap);
 extern VOID  DestroyAnnunBitmap(VOID);
 extern VOID  UpdateMainDisplay(VOID);
-extern VOID  UpdateAnnunciators(VOID);
+extern VOID  UpdateAnnunciators(DWORD dwUpdateMask);
 extern VOID  StartDisplay(VOID);
 extern VOID  StopDisplay(VOID);
 extern VOID  ResizeWindow(VOID);
 
-// Engine.c    
+// Engine.c
 extern CHIPSET Chipset;
 extern BOOL    bInterrupt;
 extern UINT    nState;
@@ -230,6 +230,7 @@ extern BOOL    CheckForBeepPatch(VOID);
 extern BOOL    PatchRom(LPCTSTR szFilename);
 extern BOOL    CrcRom(WORD *pwChk);
 extern BOOL    MapRom(LPCTSTR szFilename);
+extern BOOL    MapRomBmp(HBITMAP hBmp);
 extern VOID    UnmapRom(VOID);
 extern VOID    ResetDocument(VOID);
 extern BOOL    NewDocument(VOID);
@@ -293,10 +294,10 @@ extern LRESULT OnToolMacroPlay(VOID);
 extern LRESULT OnToolMacroStop(VOID);
 extern LRESULT OnToolMacroSettings(VOID);
 
-// Redeye.c 
+// Redeye.c
 extern VOID IrPrinter(BYTE c);
 
-// Udp.c 
+// Udp.c
 extern TCHAR szUdpServer[1024];
 extern WORD  wUdpPort;
 extern VOID  ResetUdp(VOID);
@@ -316,9 +317,6 @@ extern UINT    RPL_Depth(VOID);
 extern DWORD   RPL_Pick(UINT l);
 extern VOID    RPL_Replace(DWORD n);
 extern VOID    RPL_Push(UINT l,DWORD n);
-
-// External.c
-extern VOID  External(CHIPSET* w);
 
 // SndEnum.c
 extern VOID SetSoundDeviceList(HWND hWnd,UINT uDeviceID);

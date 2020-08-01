@@ -320,24 +320,6 @@ static JMPTAB o8A_[] =
 
 static JMPTAB o81B_[] =
 {
-#if 1										// 1LK7
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o81B1,		F,				// normally o_invalid3, beep patch
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F,
-	(LPCVOID) o_invalid3,	F
-#else										// PC=A / PC=C / A=PC / C=PC / APCEX / CPCEX group
 	(LPCVOID) o_invalid4,	F,
 	(LPCVOID) o_invalid4,	F,
 	(LPCVOID) o81B2,		F,
@@ -354,7 +336,6 @@ static JMPTAB o81B_[] =
 	(LPCVOID) o_invalid4,	F,
 	(LPCVOID) o_invalid4,	F,
 	(LPCVOID) o_invalid4,	F
-#endif
 };
 
 static JMPTAB o81Af2_[] =
@@ -493,7 +474,8 @@ static JMPTAB o81_[] =
 	(LPCVOID) o_invalid3,	F,				// 1LK7
 //	(LPCVOID) o81A_,		4,				// r=ss.F fs / ss=r.F fs / rssEX.F fs group
 	(LPCVOID) o_invalid3,	F,				// 1LK7
-	(LPCVOID) o81B_,		3,
+//	(LPCVOID) o81B_,		3,				// PC=A / PC=C / A=PC / C=PC / APCEX / CPCEX group
+	(LPCVOID) o_invalid3,	F,				// 1LK7
 	(LPCVOID) o81C,			F,
 	(LPCVOID) o81D,			F,
 	(LPCVOID) o81E,			F,

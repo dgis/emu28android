@@ -53,7 +53,7 @@ add_library( # Sets the name of the library.
         src/main/cpp/core/disrpl.c
 #        src/main/cpp/core/Emu28.c #-> To rewrite
         src/main/cpp/core/engine.c
-        src/main/cpp/core/external.c
+#        src/main/cpp/core/external.c REMOVED in 1.34
         src/main/cpp/core/fetch.c
         src/main/cpp/core/files.c
         src/main/cpp/core/keyboard.c
@@ -69,7 +69,8 @@ add_library( # Sets the name of the library.
         src/main/cpp/core/settings.c
 #        src/main/cpp/core/sndenum.c
         src/main/cpp/core/sound.c
-        src/main/cpp/core/stack.c
+		src/main/cpp/core/stack.c
+		src/main/cpp/core/stegano.c
         src/main/cpp/core/symbfile.c
         src/main/cpp/core/timer.c
 #        src/main/cpp/core/udp.c
