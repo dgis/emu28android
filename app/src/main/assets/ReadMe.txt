@@ -7,7 +7,7 @@ It can open or save the exact same state files (state.e28) than the original Win
 
 This application does NOT come with the ROM files!
 You will need KML scripts and ROM files already copied into your Android filesystem.
-You can download the KML scripts here: http://regis.cosnier.free.fr/soft/androidEmu28/Emu28-KML-original.zip
+You can download the KML scripts here: http://regis.cosnier.free.fr/soft/androidEmu28/Emu28-KML-original-134.zip
 Or you can download the KML scripts from the original Emu28 Windows application archive (https://hp.giesselink.com/emu28.htm)
 and you can extract the ROM file from a real calculator (or be lucky on internet).
 Be careful about the case sensitivity of the filename in the KML script (Linux is case sensitive, not Windows).
@@ -43,6 +43,16 @@ NOT WORKING YET
 
 
 CHANGES
+
+Version 1.2 (2020-XX-XX)
+
+- Update from the original source code Emu28 version 1.34 from Christoph Gießelink.
+- If the KML folder does not exist (like the first time), prompt the user to choose a new KML folder.
+- Move the KML folder in the JSON settings embedded in the state file because Windows cannot open the state file with KML url longer than 256 byte.
+- Prevent to auto save before launching the "Open...", "Save As...", "Load Object...", "Save Object...", etc...
+- Prevent app not responding (ANR) in NativeLib.buttonUp().
+- Use the extension *.e28c to avoid confusion with the HP28S.
+
 
 Version 1.1 (2020-05-24)
 

@@ -46,7 +46,12 @@ CHANGES
 
 Version 1.2 (2020-XX-XX)
 
-- It is based on Emu28 version 1.34 from Christoph Gießelink.
+- Update from the original source code Emu28 version 1.34 from Christoph Gießelink.
+- If the KML folder does not exist (like the first time), prompt the user to choose a new KML folder.
+- Move the KML folder in the JSON settings embedded in the state file because Windows cannot open the state file with KML url longer than 256 byte.
+- Prevent to auto save before launching the "Open...", "Save As...", "Load Object...", "Save Object...", etc...
+- Prevent app not responding (ANR) in NativeLib.buttonUp().
+- Use the extension *.e28c to avoid confusion with the HP28S.
 
 
 Version 1.1 (2020-05-24)
