@@ -52,6 +52,7 @@ Version 1.2 (2020-XX-XX)
 - Prevent to auto save before launching the "Open...", "Save As...", "Load Object...", "Save Object...", etc...
 - Prevent app not responding (ANR) in NativeLib.buttonUp().
 - Use the extension *.e28c to avoid confusion with the HP28S.
+- In the menu header, switch the pixel format RGB to BGR when an icon of type BMP is defined in the KML script.
 
 
 Version 1.1 (2020-05-24)
