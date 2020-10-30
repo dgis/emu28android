@@ -44,10 +44,12 @@ NOT WORKING YET
 
 CHANGES
 
-Version 1.3 (2020-10-XX)
+Version 1.3 (2020-11-XX)
 
-- Fix transparency issue (RGB -> NGR).
+- Replaces the haptic feedback switch with a slider to adjust the vibration duration.
+- Fix transparency issue (RGB -> BGR).
 - Fix a printer issue from Christoph Gießelink's HP82240B Printer Simulator version 1.12.
+- Fix the KML button Type 3 with a Background offset which was not display at the right location (Fix #15). But Type 3 does not work very well with Emu42.
 
 
 Version 1.2 (2020-09-07)
