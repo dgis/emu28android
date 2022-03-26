@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <jni.h>
+#include <sys/select.h>
 #include <android/bitmap.h>
 #include <android/asset_manager.h>
 #include <android/log.h>
@@ -59,6 +60,11 @@
 #   define FILE_LOGD(...)
 #endif
 
+#if defined DEBUG_ANDROID_SERIAL
+#   define SERIAL_LOGD(...) LOGD(__VA_ARGS__)
+#else
+#   define SERIAL_LOGD(...)
+#endif
 
 #define _MSC_VER 1914
 #define GetWindowLongPtr	GetWindowLong
@@ -475,6 +481,38 @@ struct _HDC {
 	int windowOriginY;
 };
 
+// Comm
+
+typedef struct _DCB {
+	DWORD DCBlength;
+	DWORD BaudRate;
+	DWORD fBinary: 1;
+	DWORD fParity: 1;
+	DWORD fOutxCtsFlow:1;
+	DWORD fOutxDsrFlow:1;
+	DWORD fDtrControl:2;
+	DWORD fDsrSensitivity:1;
+	DWORD fTXContinueOnXoff: 1;
+	DWORD fOutX: 1;
+	DWORD fInX: 1;
+	DWORD fErrorChar: 1;
+	DWORD fNull: 1;
+	DWORD fRtsControl:2;
+	DWORD fAbortOnError:1;
+	DWORD fDummy2:17;
+	WORD wReserved;
+	WORD XonLim;
+	WORD XoffLim;
+	BYTE ByteSize;
+	BYTE Parity;
+	BYTE StopBits;
+	char XonChar;
+	char XoffChar;
+	char ErrorChar;
+	char EofChar;
+	char EvtChar;
+	WORD wReserved1;
+} DCB, *LPDCB;
 
 // Handle
 
@@ -511,10 +549,12 @@ enum HANDLE_TYPE {
 	HANDLE_TYPE_THREAD,
 	HANDLE_TYPE_WINDOW,
 	HANDLE_TYPE_ICON,
+	HANDLE_TYPE_COM,
 };
 struct _HANDLE {
     enum HANDLE_TYPE handleType;
-
+	union {
+		struct {
     // HANDLE_TYPE_FILE*
     int fileDescriptor;
     BOOL fileOpenFileFromContentResolver;
@@ -526,7 +566,9 @@ struct _HANDLE {
     size_t fileMappingSize;
     void* fileMappingAddress;
 	DWORD fileMappingProtect;
+		};
 
+		struct {
 	// HANDLE_TYPE_THREAD
     pthread_t threadId;
     DWORD (*threadStartAddress)(LPVOID);
@@ -534,18 +576,35 @@ struct _HANDLE {
     struct _HANDLE * threadEventMessage;
     struct tagMSG threadMessage;
 	int threadIndex;
+		};
 
+		struct {
 	// HANDLE_TYPE_EVENT
     pthread_cond_t eventCVariable;
     pthread_mutex_t eventMutex;
     BOOL eventAutoReset;
     BOOL eventState;
+		};
 
+	    struct {
     // HANDLE_TYPE_WINDOW
     HDC windowDC;
+	    };
 
+	    struct {
     // HANDLE_TYPE_ICON
     HBITMAP icon;
+};
+
+	    struct {
+		    // HANDLE_TYPE_COM
+		    LPDCB commState;
+		    struct _HANDLE * commEvent;
+		    int commIndex;
+		    int commId;
+		    int commEventMask;
+	    };
+    };
 };
 typedef struct _HANDLE * HANDLE;
 
@@ -725,12 +784,12 @@ extern BOOL BitBlt(HDC hdc, int x, int y, int cx, int cy, HDC hdcSrc, int x1, in
 extern int SetStretchBltMode(HDC hdc, int mode);
 extern BOOL StretchBlt(HDC hdcDest, int xDest, int yDest, int wDest, int hDest, HDC hdcSrc, int xSrc, int ySrc, int wSrc, int hSrc, DWORD rop);
 extern void StretchBltInternal(int xDest, int yDest, int wDest, int hDest, const void *pixelsDestination,
-						int destinationBitCount, int destinationStride, int destinationWidth,
-						int destinationHeight, int xSrc, int ySrc, int hSrc, int wSrc,
-						const void *pixelsSource, UINT sourceBitCount, int sourceStride,
-						int sourceWidth, int sourceHeight, DWORD rop, BOOL reverseHeight,
-						const PALETTEENTRY *palPalEntry, COLORREF brushColor,
-						COLORREF backgroundColor);
+                               int destinationBitCount, int destinationStride, int destinationWidth,
+                               int destinationHeight, int xSrc, int ySrc, int hSrc, int wSrc,
+                               const void *pixelsSource, UINT sourceBitCount, int sourceStride,
+                               int sourceWidth, int sourceHeight, DWORD rop, BOOL sourceTopDown, BOOL destinationTopDown,
+                               const PALETTEENTRY *palPalEntry, COLORREF brushColor,
+                               COLORREF backgroundColor);
 extern UINT SetDIBColorTable(HDC  hdc, UINT iStart, UINT cEntries, CONST RGBQUAD *prgbq);
 /* constants for CreateDIBitmap */
 #define CBM_INIT        0x04L   /* initialize bitmap */
@@ -753,6 +812,7 @@ typedef struct _RGNDATA {
     char            Buffer[1];
 } RGNDATA, *PRGNDATA, NEAR *NPRGNDATA, FAR *LPRGNDATA;
 extern int GetDIBits(HDC hdc, HBITMAP hbm, UINT start, UINT cLines, LPVOID lpvBits, LPBITMAPINFO lpbmi, UINT usage);
+extern int SetDIBits(HDC hdc, HBITMAP hbm, UINT start, UINT cLines, const VOID *lpBits, const BITMAPINFO *lpbmi, UINT ColorUse);
 extern COLORREF GetPixel(HDC hdc, int x ,int y);
 extern HPALETTE SelectPalette(HDC hdc, HPALETTE hPal, BOOL bForceBkgd);
 extern UINT RealizePalette(HDC hdc);
@@ -761,6 +821,8 @@ extern COLORREF SetBkColor(HDC hdc, COLORREF color);
 #define RDH_RECTANGLES  1
 extern BOOL SetRect(LPRECT lprc, int xLeft, int yTop, int xRight, int yBottom);
 extern BOOL SetRectEmpty(LPRECT lprc);
+extern BOOL IsRectEmpty(CONST RECT *lprc);
+extern BOOL UnionRect(LPRECT dest, CONST RECT *src1, CONST RECT *src2);
 
 struct HRGN__ { int unused; };
 typedef struct HRGN__ *HRGN;
@@ -945,7 +1007,6 @@ extern BOOL InsertMenu(HMENU hMenu, UINT uPosition, UINT uFlags, UINT_PTR uIDNew
 #define SWP_NOMOVE          0x0002
 #define SWP_NOZORDER        0x0004
 extern BOOL SetWindowPos(HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags);
-extern BOOL IsRectEmpty(CONST RECT *lprc);
 extern BOOL WINAPI SetWindowOrgEx(HDC hdc, int x, int y, LPPOINT lppt);
 
 #define _MAX_PATH   260 // max. length of full pathname
@@ -1214,6 +1275,14 @@ extern void mainViewResizeCallback(int x, int y);
 extern int openFileFromContentResolver(const TCHAR * fileURL, int writeAccess);
 extern int openFileInFolderFromContentResolver(const TCHAR * filename, const TCHAR * folderURL, int writeAccess);
 extern int closeFileFromContentResolver(int fd);
+extern int openSerialPort(const TCHAR * serialPort);
+extern int closeSerialPort(int serialPortId);
+extern int setSerialPortParameters(int serialPortId, int baudRate);
+extern int readSerialPort(int serialPortId, LPBYTE buffer, int nNumberOfBytesToRead);
+extern int writeSerialPort(int serialPortId, LPBYTE buffer, int bufferSize);
+extern int serialPortPurgeComm(int serialPortId, int dwFlags);
+extern int serialPortSetBreak(int serialPortId);
+extern int serialPortClearBreak(int serialPortId);
 extern int showAlert(const TCHAR * messageText, int flags);
 extern void sendMenuItemCommand(int menuItem);
 extern TCHAR szCurrentKml[MAX_PATH];
@@ -1292,38 +1361,8 @@ typedef struct _COMMTIMEOUTS {
 	DWORD WriteTotalTimeoutConstant;
 } COMMTIMEOUTS,*LPCOMMTIMEOUTS;
 
-typedef struct _DCB {
-	DWORD DCBlength;
-	DWORD BaudRate;
-	DWORD fBinary: 1;
-	DWORD fParity: 1;
-	DWORD fOutxCtsFlow:1;
-	DWORD fOutxDsrFlow:1;
-	DWORD fDtrControl:2;
-	DWORD fDsrSensitivity:1;
-	DWORD fTXContinueOnXoff: 1;
-	DWORD fOutX: 1;
-	DWORD fInX: 1;
-	DWORD fErrorChar: 1;
-	DWORD fNull: 1;
-	DWORD fRtsControl:2;
-	DWORD fAbortOnError:1;
-	DWORD fDummy2:17;
-	WORD wReserved;
-	WORD XonLim;
-	WORD XoffLim;
-	BYTE ByteSize;
-	BYTE Parity;
-	BYTE StopBits;
-	char XonChar;
-	char XoffChar;
-	char ErrorChar;
-	char EofChar;
-	char EvtChar;
-	WORD wReserved1;
-} DCB, *LPDCB;
-
 extern BOOL GetOverlappedResult(HANDLE hFile, LPOVERLAPPED lpOverlapped, LPDWORD lpNumberOfBytesTransferred, BOOL bWait);
+extern void commEvent(int commId, int eventMask);
 extern BOOL WaitCommEvent(HANDLE hFile, LPDWORD lpEvtMask, LPOVERLAPPED lpOverlapped);
 extern BOOL ClearCommError(HANDLE hFile, LPDWORD lpErrors, LPCOMSTAT lpStat);
 extern BOOL SetCommTimeouts(HANDLE hFile, LPCOMMTIMEOUTS lpCommTimeouts);
@@ -1340,6 +1379,7 @@ typedef int SOCKET;
 #define SOCKET_ERROR            (-1)
 
 #define WSAEINTR 10004L
+#define WSAEWOULDBLOCK 10035L
 extern int WSAGetLastError();
 
 typedef struct WSAData {

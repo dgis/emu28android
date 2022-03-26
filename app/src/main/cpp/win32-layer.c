@@ -30,9 +30,10 @@
 extern JavaVM *java_machine;
 extern jobject bitmapMainScreen;
 extern AndroidBitmapInfo androidBitmapInfo;
+//extern RECT mainViewRectangleToUpdate;
 
-HANDLE hWnd;
-LPTSTR szTitle;
+extern HANDLE hWnd;
+extern LPTSTR szTitle;
 LPTSTR szCurrentAssetDirectory = NULL;
 LPTSTR szCurrentContentDirectory = NULL;
 AAssetManager * assetManager;
@@ -42,6 +43,8 @@ const TCHAR * contentScheme = _T("content://");
 size_t contentSchemeLength;
 const TCHAR * documentScheme = _T("document:");
 size_t documentSchemeLength;
+const TCHAR * comPrefix = _T("\\\\.\\");
+size_t comPrefixLength;
 TCHAR szFilePathTmp[MAX_PATH];
 
 
@@ -57,6 +60,8 @@ static void initTimer();
 #define MAX_FILE_MAPPING_HANDLE 10
 static HANDLE fileMappingHandles[MAX_FILE_MAPPING_HANDLE];
 
+HBITMAP rootBITMAP;
+
 void win32Init() {
     initTimer();
     for (int i = 0; i < MAX_FILE_MAPPING_HANDLE; ++i) {
@@ -66,6 +71,9 @@ void win32Init() {
     assetsPrefixLength = _tcslen(assetsPrefix);
     contentSchemeLength = _tcslen(contentScheme);
 	documentSchemeLength = _tcslen(documentScheme);
+	comPrefixLength = _tcslen(comPrefix);
+
+	rootBITMAP = CreateCompatibleBitmap(NULL, 0, 0);
 }
 
 int abs (int i) {
@@ -109,8 +117,44 @@ BOOL SetCurrentDirectory(LPCTSTR path) {
 extern BOOL settingsPort2en;
 extern BOOL settingsPort2wr;
 
+#define MAX_CREATED_COMM 30
+static HANDLE comms[MAX_CREATED_COMM];
+static pthread_mutex_t commsLock;
+
+
 HANDLE CreateFile(LPCTSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPVOID lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, LPVOID hTemplateFile) {
     FILE_LOGD("CreateFile(lpFileName: \"%s\", dwDesiredAccess: 0x%08x)", lpFileName, dwShareMode);
+
+	BOOL foundCOMPrefix = _tcsncmp(lpFileName, comPrefix, comPrefixLength) == 0;
+	if(foundCOMPrefix) {
+
+		int serialPortId = openSerialPort(lpFileName);
+		if(serialPortId > 0) {
+			// We try to open a COM/Serial port
+			HANDLE handle = malloc(sizeof(struct _HANDLE));
+			memset(handle, 0, sizeof(struct _HANDLE));
+			handle->handleType = HANDLE_TYPE_COM;
+			handle->commEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+			handle->commId = serialPortId;
+
+			pthread_mutex_lock(&commsLock);
+			handle->commIndex = -1;
+			for(int i = 0; i < MAX_CREATED_COMM; i++) {
+				if(comms[i] == NULL) {
+					handle->commIndex = i;
+					comms[handle->commIndex] = handle;
+					break;
+				}
+			}
+			pthread_mutex_unlock(&commsLock);
+
+			SERIAL_LOGD("CreateFile(lpFileName: \"%s\", ...) commId: %d, commIndex: %d", lpFileName, handle->commId, handle->commIndex);
+
+			return handle;
+		} else
+			return (HANDLE) INVALID_HANDLE_VALUE;
+	}
+
     BOOL forceNormalFile = FALSE;
     securityExceptionOccured = FALSE;
 #if EMUXX == 48
@@ -242,6 +286,27 @@ HANDLE CreateFile(LPCTSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, 
     return (HANDLE) INVALID_HANDLE_VALUE;
 }
 
+char * dumpToHexAscii(char * buffer, int inputSize, int charWidth) {
+	int numLines = 1 + inputSize / charWidth;
+	char * hexAsciiDump = malloc(4 * inputSize  + 3 * numLines + 10);
+	unsigned char * pBuff = (unsigned char *)buffer;
+	char * pDump = hexAsciiDump;
+	for (int l = 0, n = 0; l < numLines; ++l) {
+		*pDump++ = (char)'\t';
+		for (int c = 0; c < charWidth && n + c < inputSize; ++c) {
+			sprintf((char *const)pDump, "%02X ", pBuff[c]);
+			pDump += 3;
+		}
+		for (int c = 0; c < charWidth && n + c < inputSize; ++c)
+			*pDump++ = isprint(pBuff[c]) ? ((char *)pBuff)[c] : '.';
+		*pDump++ = '\n';
+		pBuff += charWidth;
+		n += charWidth;
+	}
+	*pDump++ = '\0';
+	return hexAsciiDump;
+}
+
 BOOL ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD lpNumberOfBytesRead, LPOVERLAPPED lpOverlapped) {
     FILE_LOGD("ReadFile(hFile: %p, lpBuffer: 0x%08x, nNumberOfBytesToRead: %d)", hFile, lpBuffer, nNumberOfBytesToRead);
     DWORD readByteCount = 0;
@@ -249,6 +314,13 @@ BOOL ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD
         readByteCount = (DWORD) read(hFile->fileDescriptor, lpBuffer, nNumberOfBytesToRead);
     } else if(hFile->handleType == HANDLE_TYPE_FILE_ASSET) {
         readByteCount = (DWORD) AAsset_read(hFile->fileAsset, lpBuffer, nNumberOfBytesToRead);
+    } else if(hFile->handleType == HANDLE_TYPE_COM) {
+	    readByteCount = (DWORD) readSerialPort(hFile->commId, lpBuffer, nNumberOfBytesToRead);
+#if defined DEBUG_ANDROID_SERIAL
+	    char * hexAsciiDump = dumpToHexAscii(lpBuffer, readByteCount, 8);
+	    SERIAL_LOGD("ReadFile(hFile: %p, lpBuffer: 0x%08x, nNumberOfBytesToRead: %d) -> %d bytes\n%s", hFile, lpBuffer, nNumberOfBytesToRead, readByteCount, hexAsciiDump);
+	    free(hexAsciiDump);
+#endif
     }
     if(lpNumberOfBytesRead)
         *lpNumberOfBytesRead = readByteCount;
@@ -257,12 +329,24 @@ BOOL ReadFile(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, LPDWORD
 
 BOOL WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite,LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped) {
     FILE_LOGD("WriteFile(hFile: %p, lpBuffer: 0x%08x, nNumberOfBytesToWrite: %d)", hFile, lpBuffer, nNumberOfBytesToWrite);
-    if(hFile->handleType == HANDLE_TYPE_FILE_ASSET)
-        return FALSE;
-    ssize_t writenByteCount = write(hFile->fileDescriptor, lpBuffer, nNumberOfBytesToWrite);
-    if(lpNumberOfBytesWritten)
-        *lpNumberOfBytesWritten = (DWORD) writenByteCount;
-    return writenByteCount >= 0;
+	if(hFile->handleType == HANDLE_TYPE_FILE) {
+		ssize_t writenByteCount = write(hFile->fileDescriptor, lpBuffer, nNumberOfBytesToWrite);
+		if(lpNumberOfBytesWritten)
+			*lpNumberOfBytesWritten = (DWORD) writenByteCount;
+		return writenByteCount >= 0;
+	} else if(hFile->handleType == HANDLE_TYPE_COM) {
+		ssize_t writenByteCount = writeSerialPort(hFile->commId, lpBuffer, nNumberOfBytesToWrite);
+#if defined DEBUG_ANDROID_SERIAL
+		char * hexAsciiDump = dumpToHexAscii(lpBuffer, writenByteCount, 8);
+		SERIAL_LOGD("WriteFile(hFile: %p, lpBuffer: 0x%08x, nNumberOfBytesToWrite: %d) -> %d bytes\n%s", hFile, lpBuffer, nNumberOfBytesToWrite, writenByteCount, hexAsciiDump);
+		free(hexAsciiDump);
+#endif
+		Sleep(4); // Seems to be needed else the kermit packet does not fully reach the genuine calculator.
+		if(lpNumberOfBytesWritten)
+			*lpNumberOfBytesWritten = (DWORD) writenByteCount;
+		return writenByteCount >= 0;
+	}
+	return FALSE;
 }
 
 DWORD SetFilePointer(HANDLE hFile, LONG lDistanceToMove, PLONG lpDistanceToMoveHigh, DWORD dwMoveMethod) {
@@ -472,8 +556,7 @@ BOOL SetEvent(HANDLE hEvent) {
     return 0;
 }
 
-BOOL ResetEvent(HANDLE hEvent)
-{
+BOOL ResetEvent(HANDLE hEvent) {
     if(hEvent) {
         int result = pthread_mutex_lock(&hEvent->eventMutex);
         _ASSERT(result == 0);
@@ -488,8 +571,7 @@ BOOL ResetEvent(HANDLE hEvent)
     return FALSE;
 }
 
-int UnlockedWaitForEvent(HANDLE hHandle, uint64_t milliseconds)
-{
+int UnlockedWaitForEvent(HANDLE hHandle, uint64_t milliseconds) {
     int result = 0;
     if (!hHandle->eventState)
     {
@@ -612,8 +694,19 @@ DWORD ResumeThread(HANDLE hThread) {
 
 BOOL SetThreadPriority(HANDLE hThread, int nPriority) {
     THREAD_LOGD("SetThreadPriority()");
-    //TODO
-    return 0;
+//	if(hThread->handleType == HANDLE_TYPE_THREAD) {
+//		int policy;
+//		struct sched_param param;
+//		int result = pthread_getschedparam(hThread->threadId, &policy, &param);
+//		if(nPriority == THREAD_PRIORITY_HIGHEST) {
+//			param.sched_priority = sched_get_priority_min(policy);
+//			param.sched_priority = sched_get_priority_max(policy);
+//		}
+//		result = pthread_setschedparam(hThread->threadId, policy, &param);
+//      // THIS DOES NOT WORK WITH ANDROID!
+//		return TRUE;
+//	}
+    return FALSE;
 }
 
 
@@ -659,6 +752,8 @@ DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 
 BOOL WINAPI CloseHandle(HANDLE hObject) {
     FILE_LOGD("CloseHandle(hObject: %p)", hObject);
+    if(!hObject)
+    	return FALSE;
     //https://msdn.microsoft.com/en-us/9b84891d-62ca-4ddc-97b7-c4c79482abd9
     // Can be a thread/event/file handle!
     switch(hObject->handleType) {
@@ -727,20 +822,48 @@ BOOL WINAPI CloseHandle(HANDLE hObject) {
             hObject->threadParameter = NULL;
             free(hObject);
             return TRUE;
+	    case HANDLE_TYPE_COM: {
+		    SERIAL_LOGD("CloseHandle(hObject: %p) for HANDLE_TYPE_COM", hObject);
+
+		    closeSerialPort(hObject->commId);
+		    hObject->commId = 0;
+
+		    hObject->handleType = HANDLE_TYPE_INVALID;
+		    if(hObject->commState) {
+			    free(hObject->commState);
+			    hObject->commState = NULL;
+		    }
+		    if(hObject->commEvent) {
+			    CloseHandle(hObject->commEvent);
+			    hObject->commEvent = NULL;
+		    }
+		    if(hObject->commIndex != -1) {
+			    pthread_mutex_lock(&commsLock);
+			    comms[hObject->commIndex] = NULL;
+			    pthread_mutex_unlock(&commsLock);
+		    }
+		    free(hObject);
+		    return TRUE;
+	    }
         default:
             break;
     }
     return FALSE;
 }
 
-void Sleep(int ms)
-{
-    time_t seconds = ms / 1000;
-    long milliseconds = ms - 1000 * seconds;
-    struct timespec timeOut, remains;
-    timeOut.tv_sec = seconds;
-    timeOut.tv_nsec = milliseconds * 1000000; /* 50 milliseconds */
-    nanosleep(&timeOut, &remains);
+void Sleep(int ms) {
+	if(ms == 0) {
+		// Because sched_yield() does not seem to work with Android, try to increase the pause duration,
+		// hoping to switch to the others thread (WorkerThread).
+		ms = 1;
+	}
+	sched_yield();
+	time_t seconds = ms / 1000;
+	long milliseconds = ms - 1000 * seconds;
+	struct timespec timeOut, remains;
+	timeOut.tv_sec = seconds;
+	timeOut.tv_nsec = milliseconds * 1000000;
+	nanosleep(&timeOut, &remains);
 }
 
 BOOL QueryPerformanceFrequency(PLARGE_INTEGER l) {
@@ -1619,7 +1742,7 @@ BOOL DeleteMenu(HMENU hMenu, UINT uPosition, UINT uFlags) { return FALSE; }
 BOOL InsertMenu(HMENU hMenu, UINT uPosition, UINT uFlags, UINT_PTR uIDNewItem, LPCTSTR lpNewItem) { return FALSE; }
 
 BOOL SetWindowPos(HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, UINT uFlags) { return 0; }
-BOOL IsRectEmpty(CONST RECT *lprc) { return 0; }
+
 BOOL WINAPI SetWindowOrgEx(HDC hdc, int x, int y, LPPOINT lppt) {
     if(lppt) {
         lppt->x = hdc->windowOriginX;
@@ -1639,21 +1762,21 @@ HGDIOBJ SelectObject(HDC hdc, HGDIOBJ h) {
             case HGDIOBJ_TYPE_BRUSH: {
                 HBRUSH oldSelectedBrushColor = hdc->selectedBrushColor;
                 hdc->selectedBrushColor = h;
-                return oldSelectedBrushColor; //h;
+                return oldSelectedBrushColor;
             }
             case HGDIOBJ_TYPE_FONT:
                 break;
             case HGDIOBJ_TYPE_BITMAP: {
-                //HBITMAP oldSelectedBitmap = hdc->selectedBitmap;
+                HBITMAP oldSelectedBitmap = hdc->selectedBitmap;
                 hdc->selectedBitmap = h;
-                return h; //oldSelectedBitmap;
+	            return oldSelectedBitmap;
             }
             case HGDIOBJ_TYPE_REGION:
                 break;
             case HGDIOBJ_TYPE_PALETTE: {
-                //HPALETTE oldSelectedPalette = hdc->selectedPalette;
+                HPALETTE oldSelectedPalette = hdc->selectedPalette;
                 hdc->selectedPalette = h;
-                return h; //oldSelectedPalette;
+	            return oldSelectedPalette;
             }
             default:
                 break;
@@ -1713,6 +1836,8 @@ BOOL DeleteObject(HGDIOBJ ho) {
             }
             case HGDIOBJ_TYPE_BITMAP: {
                 PAINT_LOGD("PAINT DeleteObject() HGDIOBJ_TYPE_BITMAP");
+                if(ho == rootBITMAP)
+                	return FALSE;
                 ho->handleType = HGDIOBJ_TYPE_INVALID;
                 if(ho->bitmapInfo)
                     free((void *) ho->bitmapInfo);
@@ -1724,6 +1849,13 @@ BOOL DeleteObject(HGDIOBJ ho) {
                 free(ho);
                 return TRUE;
             }
+	        case HGDIOBJ_TYPE_BRUSH: {
+		        PAINT_LOGD("PAINT DeleteObject() HGDIOBJ_TYPE_BRUSH");
+		        ho->handleType = HGDIOBJ_TYPE_INVALID;
+		        ho->brushColor = 0;
+		        free(ho);
+		        return TRUE;
+	        }
             default:
                 break;
         }
@@ -1777,6 +1909,7 @@ HDC CreateCompatibleDC(HDC hdc) {
     memset(handle, 0, sizeof(struct _HDC));
     handle->handleType = HDC_TYPE_DC;
     handle->hdcCompatible = hdc;
+	handle->selectedBitmap = rootBITMAP;
     return handle;
 }
 HDC GetDC(HWND hWnd) {
@@ -1844,6 +1977,13 @@ BOOL PatBlt(HDC hdcDest, int x, int y, int w, int h, DWORD rop) {
 
             destinationStride = androidBitmapInfo.stride;
 
+//	        RECT newRectangleToUpdate;
+//	        newRectangleToUpdate.left = x;
+//	        newRectangleToUpdate.top = y;
+//	        newRectangleToUpdate.right = x + w;
+//	        newRectangleToUpdate.bottom = y + h;
+//	        UnionRect(&mainViewRectangleToUpdate, &mainViewRectangleToUpdate, &newRectangleToUpdate);
+
             if ((ret = AndroidBitmap_lockPixels(jniEnv, bitmapMainScreen, &pixelsDestination)) < 0) {
                 LOGD("AndroidBitmap_lockPixels() failed ! error=%d", ret);
                 return FALSE;
@@ -1854,6 +1994,7 @@ BOOL PatBlt(HDC hdcDest, int x, int y, int w, int h, DWORD rop) {
 
             destinationWidth = hBitmapDestination->bitmapInfoHeader->biWidth;
             destinationHeight = abs(hBitmapDestination->bitmapInfoHeader->biHeight);
+	        //TODO destinationTopDown = hBitmapDestination->bitmapInfoHeader->biHeight < 0;
 
             destinationStride = (float)(4 * ((destinationWidth * hBitmapDestination->bitmapInfoHeader->biBitCount + 31) / 32));
         }
@@ -1942,7 +2083,8 @@ BOOL StretchBlt(HDC hdcDest, int xDest, int yDest, int wDest, int hDest, HDC hdc
         void * pixelsDestination = NULL;
         int destinationBitCount = 8;
 
-        BOOL reverseHeight = hBitmapSource->bitmapInfoHeader->biHeight < 0;
+	    BOOL sourceTopDown = hBitmapSource->bitmapInfoHeader->biHeight < 0;
+	    BOOL destinationTopDown = FALSE;
 
         int sourceWidth = hBitmapSource->bitmapInfoHeader->biWidth;
         int sourceHeight = abs(hBitmapSource->bitmapInfoHeader->biHeight); // Can be < 0
@@ -1974,7 +2116,16 @@ BOOL StretchBlt(HDC hdcDest, int xDest, int yDest, int wDest, int hDest, HDC hdc
             destinationBitCount = 32;
             destinationStride = androidBitmapInfo.stride;
 
-            if ((ret = AndroidBitmap_lockPixels(jniEnv, bitmapMainScreen, &pixelsDestination)) < 0) {
+	        destinationTopDown = TRUE;
+
+//	        RECT newRectangleToUpdate;
+//	        newRectangleToUpdate.left = xDest;
+//	        newRectangleToUpdate.top = yDest;
+//	        newRectangleToUpdate.right = xDest + wDest;
+//	        newRectangleToUpdate.bottom = yDest + hDest;
+//	        UnionRect(&mainViewRectangleToUpdate, &mainViewRectangleToUpdate, &newRectangleToUpdate);
+
+	        if ((ret = AndroidBitmap_lockPixels(jniEnv, bitmapMainScreen, &pixelsDestination)) < 0) {
                 LOGD("AndroidBitmap_lockPixels() failed ! error=%d", ret);
                 return FALSE;
             }
@@ -1984,6 +2135,7 @@ BOOL StretchBlt(HDC hdcDest, int xDest, int yDest, int wDest, int hDest, HDC hdc
 
             destinationWidth = hBitmapDestination->bitmapInfoHeader->biWidth;
             destinationHeight = abs(hBitmapDestination->bitmapInfoHeader->biHeight);
+            destinationTopDown = hBitmapDestination->bitmapInfoHeader->biHeight < 0;
             destinationBitCount = hBitmapDestination->bitmapInfoHeader->biBitCount;
             destinationStride = 4 * ((destinationWidth * hBitmapDestination->bitmapInfoHeader->biBitCount + 31) / 32);
         }
@@ -2015,11 +2167,11 @@ BOOL StretchBlt(HDC hdcDest, int xDest, int yDest, int wDest, int hDest, HDC hdc
             backgroundColor = hdcDest->backgroundColor;
         }
 
-        StretchBltInternal(xDest, yDest, wDest, hDest, pixelsDestination, destinationBitCount,
-                           destinationStride, destinationWidth, destinationHeight,
-                           xSrc, ySrc, wSrc, hSrc, pixelsSource, sourceBitCount,
-                           sourceStride, sourceWidth, sourceHeight,
-                           rop, reverseHeight, palPalEntry, brushColor, backgroundColor);
+        StretchBltInternal(xDest, yDest, wDest, hDest,
+                           pixelsDestination, destinationBitCount, destinationStride, destinationWidth, destinationHeight,
+                           xSrc, ySrc, wSrc, hSrc,
+                           pixelsSource, sourceBitCount, sourceStride, sourceWidth, sourceHeight,
+                           rop, sourceTopDown, destinationTopDown, palPalEntry, brushColor, backgroundColor);
 
         if(jniEnv && hdcDest->hdcCompatible == NULL && (ret = AndroidBitmap_unlockPixels(jniEnv, bitmapMainScreen)) < 0) {
             LOGD("AndroidBitmap_unlockPixels() failed ! error=%d", ret);
@@ -2035,7 +2187,7 @@ void StretchBltInternal(int xDest, int yDest, int wDest, int hDest,
                         const void *pixelsDestination, int destinationBitCount, int destinationStride, int destinationWidth, int destinationHeight,
                         int xSrc, int ySrc, int wSrc, int hSrc,
                         const void *pixelsSource, UINT sourceBitCount, int sourceStride, int sourceWidth, int sourceHeight,
-                        DWORD rop, BOOL reverseHeight, const PALETTEENTRY *palPalEntry, COLORREF brushColor, COLORREF backgroundColor) {
+                        DWORD rop, BOOL sourceTopDown, BOOL destinationTopDown, const PALETTEENTRY *palPalEntry, COLORREF brushColor, COLORREF backgroundColor) {
     int dst_maxx = xDest + wDest;
     int dst_maxy = yDest + hDest;
 
@@ -2052,12 +2204,19 @@ void StretchBltInternal(int xDest, int yDest, int wDest, int hDest,
     if(dst_maxy > destinationHeight)
         dst_maxy = destinationHeight;
 
+    int src_cury, dst_cury;
     for (int y = yDest; y < dst_maxy; y++) {
-        int src_cury = ySrc + (y - yDest) * hSrc / hDest;
-        if(!reverseHeight)
-            src_cury = sourceHeight - 1 - src_cury;
+		if(sourceTopDown)
+			src_cury = ySrc + (y - yDest) * hSrc / hDest; // Source top-down
+		else
+			src_cury = sourceHeight - 1 - (ySrc + (y - yDest) * hSrc / hDest); // Source bottom-up
         if (src_cury < 0 || src_cury >= sourceHeight)
             continue;
+        if(destinationTopDown)
+	        dst_cury = y; // Destination top-down
+	    else
+	        dst_cury = destinationHeight - 1 - y; // Destination bottom-up
+
         BYTE parity = (BYTE) xSrc;
         for (int x = xDest; x < dst_maxx; x++, parity++) {
             int src_curx = xSrc + (x - xDest) * wSrc / wDest;
@@ -2065,7 +2224,7 @@ void StretchBltInternal(int xDest, int yDest, int wDest, int hDest,
                 continue;
 
             BYTE * sourcePixelBase = pixelsSource + sourceStride * src_cury;
-            BYTE * destinationPixelBase = pixelsDestination + destinationStride * y;
+            BYTE * destinationPixelBase = pixelsDestination + destinationStride * dst_cury;
 
             COLORREF sourceColor = 0xFF000000;
             BYTE * sourceColorPointer = (BYTE *) &sourceColor;
@@ -2078,7 +2237,7 @@ void StretchBltInternal(int xDest, int yDest, int wDest, int hDest,
                     // and the color white in the source turns into the destination’s background
                     // color.
                     BYTE * sourcePixel = sourcePixelBase + ((UINT)src_curx >> (UINT)3);
-                    UINT bitNumber = (UINT) (src_curx % 8);
+                    UINT bitNumber = (UINT) (7 - (src_curx % 8));
                     if(*sourcePixel & ((UINT)1 << bitNumber)) {
                         // Monochrome 1=White
                         sourceColorPointer[0] = 255;
@@ -2152,7 +2311,7 @@ void StretchBltInternal(int xDest, int yDest, int wDest, int hDest,
                     // In other words, GDI considers a monochrome bitmap to be
                     // black pixels on a white background.
                     BYTE * destinationPixel = destinationPixelBase + (x >> 3);
-                    UINT bitNumber = x % 8;
+	                UINT bitNumber = (UINT) (7 - (x % 8));
                     if(backgroundColor == sourceColor) {
                         *destinationPixel |= (1 << bitNumber); // 1 White
                     } else {
@@ -2225,7 +2384,7 @@ HBITMAP CreateBitmap( int nWidth, int nHeight, UINT nPlanes, UINT nBitCount, CON
     newBitmapInfo->bmiHeader.biBitCount = (WORD) nBitCount;
     newBitmapInfo->bmiHeader.biClrUsed = 0;
     newBitmapInfo->bmiHeader.biWidth = nWidth;
-    newBitmapInfo->bmiHeader.biHeight = -nHeight;
+	newBitmapInfo->bmiHeader.biHeight = nHeight;
     newBitmapInfo->bmiHeader.biPlanes = (WORD) nPlanes;
     newHBITMAP->bitmapInfo = newBitmapInfo;
     newHBITMAP->bitmapInfoHeader = (BITMAPINFOHEADER *)newBitmapInfo;
@@ -2238,29 +2397,237 @@ HBITMAP CreateBitmap( int nWidth, int nHeight, UINT nPlanes, UINT nBitCount, CON
     newHBITMAP->bitmapBits = bitmapBits;
     return newHBITMAP;
 }
+
+// RLE decode from Christoph Giesselink in FILES.C from Emu48forPocketPC v125
+#define WIDTHBYTES(bits) ((((bits) + 31) / 32) * 4)
+
+typedef struct _BmpFile
+{
+	DWORD  dwPos;							// actual reading pos
+	DWORD  dwFileSize;						// file size
+	LPBYTE pbyFile;							// buffer
+} BMPFILE, FAR *LPBMPFILE, *PBMPFILE;
+
+static BOOL ReadRleBmpByte(LPBMPFILE pBmp, BYTE *n)
+{
+	// outside BMP file
+	if (pBmp->dwPos >= pBmp->dwFileSize)
+		return TRUE;
+
+	*n = pBmp->pbyFile[pBmp->dwPos++];
+	return FALSE;
+}
+
+static BOOL DecodeRleBmp(LPBYTE ppvBits,BITMAPINFOHEADER CONST *lpbi, LPBMPFILE pBmp)
+{
+	BYTE  byLength,byColorIndex;
+	DWORD dwPos,dwRow,dwSizeImage,dwPixelPerLine;
+	BOOL  bDecoding;
+
+	_ASSERT(ppvBits != NULL);				// destination
+	_ASSERT(lpbi != NULL);					// BITMAPINFOHEADER
+	_ASSERT(pBmp != NULL);					// bitmap data
+
+	// valid bit count for RLE bitmaps
+	_ASSERT(lpbi->biBitCount == 4 || lpbi->biBitCount == 8);
+
+	// wrong bit count for compressed bitmap or top-down bitmap
+	if ((lpbi->biBitCount != 4 && lpbi->biBitCount != 8) || lpbi->biHeight < 0)
+		return TRUE;
+
+	bDecoding = TRUE;						// RLE decoder running
+	dwPos = dwRow = 0;						// reset absolute position and row counter
+
+	// image size
+	_ASSERT(lpbi->biHeight >= 0);
+	dwSizeImage = WIDTHBYTES((DWORD)lpbi->biWidth * lpbi->biBitCount) * lpbi->biHeight;
+
+	ZeroMemory(ppvBits,dwSizeImage);		// clear bitmap
+
+	// image size in pixel
+	dwSizeImage *= (8 / lpbi->biBitCount);
+
+	// no. of pixels per line
+	dwPixelPerLine = dwSizeImage / lpbi->biHeight;
+
+	do
+	{
+		// length information is WORD aligned
+		_ASSERT(((DWORD) &pBmp->pbyFile[pBmp->dwPos] % sizeof(WORD)) == 0);
+		if (ReadRleBmpByte(pBmp,&byLength))     return TRUE;
+		if (ReadRleBmpByte(pBmp,&byColorIndex)) return TRUE;
+
+		if (byLength)						// length information
+		{
+			// check for buffer overflow
+			if (dwPos + byLength > dwSizeImage)
+			{
+				// write rest of data until buffer full
+				byLength = (dwPos > dwSizeImage) ? 0 : (BYTE) (dwSizeImage - dwPos);
+				bDecoding = FALSE;			// abort
+			}
+
+			if (lpbi->biBitCount == 4)		// RLE4
+			{
+				BYTE byColor[2];
+				UINT s,d;
+
+				// split into upper/lower nibble
+				byColor[0] = byColorIndex >> 4;
+				byColor[1] = byColorIndex & 0x0F;
+
+				s = 0;						// source nibble selector [0/1]
+				d = (~dwPos & 1) * 4;		// destination shift [0/4]
+
+				while (byLength-- > 0)
+				{
+					// write nibble to memory
+					_ASSERT((byColor[s] & 0xF0) == 0);
+					ppvBits[dwPos++/2] |= (byColor[s] << d);
+					s ^= 1;					// next source nibble
+					d ^= 4;					// next destination shift
+				}
+			}
+			else							// RLE8
+			{
+				while (byLength-- > 0)
+					ppvBits[dwPos++] = byColorIndex;
+			}
+		}
+		else								// escape sequence
+		{
+			switch (byColorIndex)
+			{
+				case 0: // End of Line
+					dwPos = ++dwRow * dwPixelPerLine;
+					break;
+				case 1: // End of Bitmap
+					bDecoding = FALSE;
+					break;
+				case 2: // Delta
+					// column offset
+					if (ReadRleBmpByte(pBmp,&byColorIndex)) return TRUE;
+					dwPos += byColorIndex;
+					// row offset
+					if (ReadRleBmpByte(pBmp,&byColorIndex)) return TRUE;
+					dwRow += byColorIndex;
+					dwPos += dwPixelPerLine * byColorIndex;
+					break;
+				default: // absolute mode
+					// check for buffer overflow
+					if (dwPos + byColorIndex > dwSizeImage)
+					{
+						// write rest of data until buffer full
+						byColorIndex = (dwPos > dwSizeImage) ? 0 : (BYTE) (dwSizeImage - dwPos);
+						bDecoding = FALSE;		// abort
+					}
+
+					if (lpbi->biBitCount == 4)	// RLE4
+					{
+						BYTE byColor,byColorPair;
+						UINT s,d;
+
+						d = (~dwPos & 1) * 4;	// destination shift [0/4]
+
+						for (s = 0; s < byColorIndex; ++s)
+						{
+							if ((s & 1) == 0)	// upper nibble
+							{
+								// fetch color pair
+								if (ReadRleBmpByte(pBmp,&byColorPair)) return TRUE;
+
+								// get upper nibble
+								byColor = (byColorPair >> 4);
+							}
+							else				// lower nibble
+							{
+								// get lower nibble
+								byColor = (byColorPair & 0x0F);
+							}
+
+							// write nibble to memory
+							_ASSERT((byColor & 0xF0) == 0);
+							ppvBits[dwPos++/2] |= (byColor << d);
+							d ^= 4;				// next destination shift
+						}
+
+						// for odd byte length detection
+						byColorIndex = (++byColorIndex) >> 1;
+					}
+					else						// RLE8
+					{
+						if (pBmp->dwPos + byColorIndex > pBmp->dwFileSize) return TRUE;
+						CopyMemory(ppvBits+dwPos,&pBmp->pbyFile[pBmp->dwPos],byColorIndex);
+						dwPos += byColorIndex;
+						pBmp->dwPos += byColorIndex;
+					}
+					// word align on odd byte length
+					if (byColorIndex & 1) ++pBmp->dwPos;
+					break;
+			}
+		}
+	}
+	while (bDecoding);
+	return FALSE;
+}
+
 HBITMAP CreateDIBitmap( HDC hdc, CONST BITMAPINFOHEADER *pbmih, DWORD flInit, CONST VOID *pjBits, CONST BITMAPINFO *pbmi, UINT iUsage) {
     PAINT_LOGD("PAINT CreateDIBitmap()");
 
-    HGDIOBJ newHBITMAP = (HGDIOBJ)malloc(sizeof(_HGDIOBJ));
-    memset(newHBITMAP, 0, sizeof(_HGDIOBJ));
-    newHBITMAP->handleType = HGDIOBJ_TYPE_BITMAP;
+	HGDIOBJ newHBITMAP = (HGDIOBJ)malloc(sizeof(_HGDIOBJ));
+	memset(newHBITMAP, 0, sizeof(_HGDIOBJ));
+	newHBITMAP->handleType = HGDIOBJ_TYPE_BITMAP;
 
-    BITMAPINFO * newBitmapInfo = malloc(sizeof(BITMAPINFO));
-    memcpy(newBitmapInfo, pbmi, sizeof(BITMAPINFO));
-    newHBITMAP->bitmapInfo = newBitmapInfo;
-    newHBITMAP->bitmapInfoHeader = (BITMAPINFOHEADER *)newBitmapInfo;
+	BITMAPINFO * newBitmapInfo = malloc(sizeof(BITMAPINFO));
+	memcpy(newBitmapInfo, pbmi, sizeof(BITMAPINFO));
+	newHBITMAP->bitmapInfo = newBitmapInfo;
+	newHBITMAP->bitmapInfoHeader = (BITMAPINFOHEADER *)newBitmapInfo;
 
-    size_t stride = (size_t)(4 * ((newBitmapInfo->bmiHeader.biWidth * newBitmapInfo->bmiHeader.biBitCount + 31) / 32));
-    size_t size = newBitmapInfo->bmiHeader.biSizeImage ?
-                    newBitmapInfo->bmiHeader.biSizeImage :
-                  abs(newBitmapInfo->bmiHeader.biHeight) * stride;
-    VOID * bitmapBits = malloc(size);
-    memcpy(bitmapBits, pjBits, size);
-    newHBITMAP->bitmapBits = bitmapBits;
-    return newHBITMAP;
+	if(flInit == CBM_INIT && pjBits) {
+		VOID * bitmapBits = NULL;
+		if(iUsage == DIB_RGB_COLORS) {
+			switch (pbmi->bmiHeader.biCompression) {
+				case BI_RLE4:
+				case BI_RLE8: {
+
+					// Destination
+					BOOL bErr;
+					newBitmapInfo->bmiHeader.biCompression = BI_RGB;
+					size_t stride = (size_t)(4 * ((newBitmapInfo->bmiHeader.biWidth * newBitmapInfo->bmiHeader.biBitCount + 31) / 32));
+					size_t size = abs(newBitmapInfo->bmiHeader.biHeight) * stride;
+					bitmapBits = malloc(size);
+					BMPFILE Bmp;
+					int bitOffset = sizeof(BITMAPINFOHEADER) + (pbmi->bmiHeader.biCompression == BI_BITFIELDS ? 3 * sizeof(DWORD) : DibNumColors(&pbmi->bmiHeader) * sizeof(RGBQUAD));
+
+					Bmp.pbyFile = ((LPBYTE)&pbmi->bmiHeader) + bitOffset;
+					Bmp.dwPos = 0;
+					Bmp.dwFileSize = -1; //size;
+
+					bErr = DecodeRleBmp(
+							/* Destination */ bitmapBits,
+							/* Destination header */ &newBitmapInfo->bmiHeader,
+							/* Source */ &Bmp);
+					break;
+				}
+				case BI_RGB:
+				case BI_BITFIELDS: {
+					// We consider the source and destination dib with the same format
+					size_t stride = (size_t)(4 * ((newBitmapInfo->bmiHeader.biWidth * newBitmapInfo->bmiHeader.biBitCount + 31) / 32));
+					size_t size = newBitmapInfo->bmiHeader.biSizeImage ?
+					              newBitmapInfo->bmiHeader.biSizeImage :
+					              abs(newBitmapInfo->bmiHeader.biHeight) * stride;
+					bitmapBits = malloc(size);
+					memcpy(bitmapBits, pjBits, size);
+					break;
+				}
+			}
+		}
+		newHBITMAP->bitmapBits = bitmapBits;
+	}
+	return newHBITMAP;
 }
 HBITMAP CreateDIBSection(HDC hdc, CONST BITMAPINFO *pbmi, UINT usage, VOID **ppvBits, HANDLE hSection, DWORD offset) {
-    PAINT_LOGD("PAINT CreateDIBitmap()");
+    PAINT_LOGD("PAINT CreateDIBSection()");
 
     HGDIOBJ newHBITMAP = (HGDIOBJ)malloc(sizeof(_HGDIOBJ));
     memset(newHBITMAP, 0, sizeof(_HGDIOBJ));
@@ -2286,7 +2653,7 @@ HBITMAP CreateDIBSection(HDC hdc, CONST BITMAPINFO *pbmi, UINT usage, VOID **ppv
     return newHBITMAP;
 }
 HBITMAP CreateCompatibleBitmap( HDC hdc, int cx, int cy) {
-    PAINT_LOGD("PAINT CreateDIBitmap()");
+    PAINT_LOGD("PAINT CreateCompatibleBitmap()");
 
     HGDIOBJ newHBITMAP = (HGDIOBJ)malloc(sizeof(_HGDIOBJ));
     memset(newHBITMAP, 0, sizeof(_HGDIOBJ));
@@ -2310,6 +2677,7 @@ HBITMAP CreateCompatibleBitmap( HDC hdc, int cx, int cy) {
     return newHBITMAP;
 }
 int GetDIBits(HDC hdc, HBITMAP hbm, UINT start, UINT cLines, LPVOID lpvBits, LPBITMAPINFO lpbmi, UINT usage) {
+	PAINT_LOGD("PAINT GetDIBits()");
     //TODO Not sure at all for this function
     if(hbm && lpbmi) {
         CONST BITMAPINFO *pbmi = hbm->bitmapInfo;
@@ -2401,8 +2769,12 @@ COLORREF GetPixel(HDC hdc, int x ,int y) {
     return resultColor;
 }
 BOOL SetRect(LPRECT lprc, int xLeft, int yTop, int xRight, int yBottom) {
-    //TODO
-    return 0;
+	if (!lprc) return FALSE;
+	lprc->left   = xLeft;
+	lprc->right  = xRight;
+	lprc->top    = yTop;
+	lprc->bottom = yBottom;
+	return TRUE;
 }
 BOOL SetRectEmpty(LPRECT lprc) {
     if(lprc) {
@@ -2413,6 +2785,38 @@ BOOL SetRectEmpty(LPRECT lprc) {
         return TRUE;
     }
     return FALSE;
+}
+
+BOOL IsRectEmpty(CONST RECT *lprc) {
+	if (!lprc)
+		return TRUE;
+	return lprc->left >= lprc->right || lprc->top >= lprc->bottom;
+}
+
+// This comes from Wine source code
+BOOL UnionRect(LPRECT dest, CONST RECT *src1, CONST RECT *src2) {
+	if (!dest) return FALSE;
+	if (IsRectEmpty(src1))
+	{
+		if (IsRectEmpty(src2))
+		{
+			SetRectEmpty( dest );
+			return FALSE;
+		}
+		else *dest = *src2;
+	}
+	else
+	{
+		if (IsRectEmpty(src2)) *dest = *src1;
+		else
+		{
+			dest->left   = min( src1->left, src2->left );
+			dest->right  = max( src1->right, src2->right );
+			dest->top    = min( src1->top, src2->top );
+			dest->bottom = max( src1->bottom, src2->bottom );
+		}
+	}
+	return TRUE;
 }
 int SetWindowRgn(HWND hWnd, HRGN hRgn, BOOL bRedraw) {
     //TODO
@@ -2482,128 +2886,6 @@ HANDLE WINAPI GetClipboardData(UINT uFormat) {
     return szText;
 }
 
-#if defined WIN32_TIMER_THREAD
-struct timerEvent {
-    BOOL valid;
-    int timerId;
-    LPTIMECALLBACK fptc;
-    DWORD_PTR dwUser;
-    UINT fuEvent;
-    timer_t timer;
-};
-
-#define MAX_TIMER 10
-struct timerEvent timerEvents[MAX_TIMER];
-pthread_mutex_t timerEventsLock;
-static void initTimer() {
-    for (int i = 0; i < MAX_TIMER; ++i) {
-        timerEvents[i].valid = FALSE;
-    }
-}
-
-void deleteTimeEvent(UINT uTimerID) {
-    pthread_mutex_lock(&timerEventsLock);
-    timer_delete(timerEvents[uTimerID - 1].timer);
-    timerEvents[uTimerID - 1].valid = FALSE;
-    pthread_mutex_unlock(&timerEventsLock);
-}
-
-MMRESULT timeKillEvent(UINT uTimerID) {
-    TIMER_LOGD("timeKillEvent(uTimerID: [%d])", uTimerID);
-    deleteTimeEvent(uTimerID);
-    return 0; //No error
-}
-
-void timerCallback(int timerId) {
-    if(timerId >= 0 && timerId < MAX_TIMER && timerEvents[timerId].valid) {
-        timerEvents[timerId].fptc((UINT) (timerId + 1), 0, (DWORD) timerEvents[timerId].dwUser, 0, 0);
-
-        if(timerEvents[timerId].fuEvent == TIME_ONESHOT) {
-            TIMER_LOGD("timerCallback remove timer uTimerID [%d]", timerId + 1);
-            deleteTimeEvent((UINT) (timerId + 1));
-        }
-
-        jniDetachCurrentThread();
-    }
-}
-MMRESULT timeSetEvent(UINT uDelay, UINT uResolution, LPTIMECALLBACK fptc, DWORD_PTR dwUser, UINT fuEvent) {
-    TIMER_LOGD("timeSetEvent(uDelay: %d, fuEvent: %d)", uDelay, fuEvent);
-
-    pthread_mutex_lock(&timerEventsLock);
-
-    // Find a timer id
-    int timerId = -1;
-    for (int i = 0; i < MAX_TIMER; ++i) {
-        if(!timerEvents[i].valid) {
-            timerId = i;
-            break;
-        }
-    }
-    if(timerId == -1) {
-        LOGD("timeSetEvent() ERROR: No more timer available");
-        pthread_mutex_unlock(&timerEventsLock);
-        return NULL;
-    }
-    timerEvents[timerId].timerId = timerId;
-    timerEvents[timerId].fptc = fptc;
-    timerEvents[timerId].dwUser = dwUser;
-    timerEvents[timerId].fuEvent = fuEvent;
-
-
-    struct sigevent sev;
-    sev.sigev_notify = SIGEV_THREAD;
-    sev.sigev_notify_function = (void (*)(sigval_t)) timerCallback; //this function will be called when timer expires
-    sev.sigev_value.sival_int = timerEvents[timerId].timerId; //this argument will be passed to cbf
-    sev.sigev_notify_attributes = NULL;
-    timer_t * timer = &(timerEvents[timerId].timer);
-
-    // CLOCK_REALTIME 0 OK but X intervals only
-    // CLOCK_MONOTONIC 1 OK but X intervals only
-    // CLOCK_PROCESS_CPUTIME_ID 2 NOTOK, not working with PERIODIC!
-    // CLOCK_THREAD_CPUTIME_ID 3 NOTOK
-    // CLOCK_MONOTONIC_RAW 4 NOTOK
-    // CLOCK_REALTIME_COARSE 5 NOTOK
-    // CLOCK_MONOTONIC_COARSE 6 NOTOK
-    // CLOCK_BOOTTIME 7 OK but X intervals only
-    // CLOCK_REALTIME_ALARM 8 NOTOK EPERM
-    // CLOCK_BOOTTIME_ALARM 9 NOTOK EPERM
-    // CLOCK_SGI_CYCLE 10 NOTOK EINVAL
-    // CLOCK_TAI 11
-
-    if (timer_create(CLOCK_REALTIME, &sev, timer) == -1) {
-        LOGD("timeSetEvent() ERROR in timer_create, errno: %d (EAGAIN 11 / EINVAL 22 / ENOMEM 12)", errno);
-        //        EAGAIN Temporary error during kernel allocation of timer structures.
-        //        EINVAL Clock ID, sigev_notify, sigev_signo, or sigev_notify_thread_id is invalid.
-        //        ENOMEM Could not allocate memory.
-        pthread_mutex_unlock(&timerEventsLock);
-        return NULL;
-    }
-
-    long freq_nanosecs = uDelay;
-    struct itimerspec its;
-    its.it_value.tv_sec = freq_nanosecs / 1000;
-    its.it_value.tv_nsec = (freq_nanosecs % 1000) * 1000000;
-    if(fuEvent == TIME_PERIODIC) {
-        its.it_interval.tv_sec = its.it_value.tv_sec;
-        its.it_interval.tv_nsec = its.it_value.tv_nsec;
-    } else /*if(fuEvent == TIME_ONESHOT)*/ {
-        its.it_interval.tv_sec = 0;
-        its.it_interval.tv_nsec = 0;
-    }
-    if (timer_settime(timerEvents[timerId].timer, 0, &its, NULL) == -1) {
-        LOGD("timeSetEvent() ERROR in timer_settime, errno: %d (EFAULT 14 / EINVAL 22)", errno);
-        //        EFAULT new_value, old_value, or curr_value is not a valid pointer.
-        //        EINVAL timerid is invalid. Or new_value.it_value is negative; or new_value.it_value.tv_nsec is negative or greater than 999,999,999.
-        timer_delete(timerEvents[timerId].timer);
-        pthread_mutex_unlock(&timerEventsLock);
-        return NULL;
-    }
-    timerEvents[timerId].valid = TRUE;
-    TIMER_LOGD("timeSetEvent() -> timerId+1: [%d]", timerId + 1);
-    pthread_mutex_unlock(&timerEventsLock);
-    return (MMRESULT) (timerId + 1); // No error
-}
-#else
 struct timerEvent {
     int timerId;
     UINT uDelay;
@@ -2691,7 +2973,7 @@ static void insertTimer(struct timerEvent * newTimer) {
 }
 
 static void timerThreadStart(LPVOID lpThreadParameter) {
-	LOGD("timerThreadStart() START");
+	TIMER_LOGD("timerThreadStart() START");
 	pthread_mutex_lock(&timerEventsLock);
     while (!timerThreadToEnd) {
         TIMER_LOGD("timerThreadStart() %ld", GetTickCount64());
@@ -2752,7 +3034,7 @@ static void timerThreadStart(LPVOID lpThreadParameter) {
     timerThreadId = 0;
     pthread_mutex_unlock(&timerEventsLock);
     jniDetachCurrentThread();
-	LOGD("timerThreadStart() END");
+	TIMER_LOGD("timerThreadStart() END");
 }
 
 MMRESULT timeSetEvent(UINT uDelay, UINT uResolution, LPTIMECALLBACK fptc, DWORD_PTR dwUser, UINT fuEvent) {
@@ -2777,9 +3059,9 @@ MMRESULT timeSetEvent(UINT uDelay, UINT uResolution, LPTIMECALLBACK fptc, DWORD_
 
     if(!timerThreadId) {
         // If not yet created, create the thread which will handle all the timers
-	    LOGD("timeSetEvent() pthread_create");
+	    TIMER_LOGD("timeSetEvent() pthread_create");
         if (pthread_create(&timerThreadId, NULL, (void *(*)(void *)) timerThreadStart, NULL) != 0) {
-            LOGD("timeSetEvent() ERROR in pthread_create, errno: %d (EAGAIN 11 / EINVAL 22 / EPERM 1)", errno);
+            TIMER_LOGD("timeSetEvent() ERROR in pthread_create, errno: %d (EAGAIN 11 / EINVAL 22 / EPERM 1)", errno);
             //        EAGAIN Insufficient resources to create another thread.
             //        EINVAL Invalid settings in attr.
             //        ENOMEM No permission to set the scheduling policy and parameters specified in attr.
@@ -2792,7 +3074,6 @@ MMRESULT timeSetEvent(UINT uDelay, UINT uResolution, LPTIMECALLBACK fptc, DWORD_
     pthread_mutex_unlock(&timerEventsLock);
     return (MMRESULT) newTimer->timerId; // No error
 }
-#endif
 
 MMRESULT timeGetDevCaps(LPTIMECAPS ptc, UINT cbtc) {
     if(ptc) {
@@ -3078,38 +3359,100 @@ BOOL GetOverlappedResult(HANDLE hFile, LPOVERLAPPED lpOverlapped, LPDWORD lpNumb
     //TODO
     return FALSE;
 }
+
+// This is not a win32 API
+void commEvent(int commId, int eventMask) {
+	SERIAL_LOGD("commEvent(commId: %d, eventMask: 0x%08x)", commId, eventMask);
+
+	HANDLE commHandleFound = NULL;
+	pthread_mutex_lock(&commsLock);
+	for(int i = 0; i < MAX_CREATED_COMM; i++) {
+		HANDLE commHandle = comms[i];
+		if (commHandle && commHandle->commId == commId) {
+			commHandleFound = commHandle;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&commsLock);
+	if(commHandleFound) {
+		commHandleFound->commEventMask = eventMask;
+		SetEvent(commHandleFound->commEvent);
+	}
+}
+
 BOOL WaitCommEvent(HANDLE hFile, LPDWORD lpEvtMask, LPOVERLAPPED lpOverlapped) {
-    //TODO
+	SERIAL_LOGD("WaitCommEvent(hFile: %p, lpEvtMask: %p)", hFile, lpEvtMask);
+	if(hFile && hFile->handleType == HANDLE_TYPE_COM) {
+		SERIAL_LOGD("WaitCommEvent(hFile: %p, lpEvtMask: %p) -> WaitForSingleObject locking", hFile, lpEvtMask);
+		WaitForSingleObject(hFile->commEvent, INFINITE);
+		SERIAL_LOGD("WaitCommEvent(hFile: %p, lpEvtMask: %p) -> WaitForSingleObject unlocked", hFile, lpEvtMask);
+		pthread_mutex_lock(&commsLock);
+		if(lpEvtMask && hFile->commEventMask) {
+			*lpEvtMask = hFile->commEventMask; //EV_RXCHAR | EV_TXEMPTY | EV_ERR
+			hFile->commEventMask = 0;
+		}
+		pthread_mutex_unlock(&commsLock);
+		SERIAL_LOGD("WaitCommEvent(hFile: %p, lpEvtMask: %p) -> *lpEvtMask=%d", hFile, lpEvtMask, *lpEvtMask);
+		return TRUE;
+	}
     return FALSE;
 }
 BOOL ClearCommError(HANDLE hFile, LPDWORD lpErrors, LPCOMSTAT lpStat) {
+	SERIAL_LOGD("ClearCommError(hFile: %p, lpErrors: %p, lpStat: %p) TODO", hFile, lpErrors, lpStat);
     //TODO
     return FALSE;
 }
 BOOL SetCommTimeouts(HANDLE hFile, LPCOMMTIMEOUTS lpCommTimeouts) {
+	SERIAL_LOGD("SetCommTimeouts(hFile: %p, lpCommTimeouts: %p) TODO", hFile, lpCommTimeouts);
     //TODO
     return FALSE;
 }
 BOOL SetCommMask(HANDLE hFile, DWORD dwEvtMask) {
+	SERIAL_LOGD("SetCommMask(hFile: %p, dwEvtMask: 0x%08X) TODO", hFile, dwEvtMask);
     //TODO
+	if(hFile && hFile->handleType == HANDLE_TYPE_COM) {
+		if(dwEvtMask == 0) {
+			// When 0, clear all events and force WaitCommEvent to return.
+			SERIAL_LOGD("SetCommMask(hFile: %p, dwEvtMask: 0x%08X) SetEvent(hEvent: %p)", hFile, dwEvtMask, hFile->commEvent);
+			SetEvent(hFile->commEvent);
+			return TRUE;
+		}
+	}
     return FALSE;
 }
 BOOL SetCommState(HANDLE hFile, LPDCB lpDCB) {
-    //TODO
+	SERIAL_LOGD("SetCommState(hFile: %p, lpDCB: %p)", hFile, lpDCB);
+    if(hFile && hFile->handleType == HANDLE_TYPE_COM && lpDCB) {
+	    int result = setSerialPortParameters(hFile->commId, lpDCB->BaudRate); //TODO 2 stop bits?
+	    if(result > 0) {
+		    if (hFile->commState)
+			    free(hFile->commState);
+		    hFile->commState = malloc(sizeof(struct _DCB));
+		    memcpy(hFile->commState, lpDCB, sizeof(struct _DCB));
+	    }
+	    return TRUE;
+    }
     return FALSE;
 }
 BOOL PurgeComm(HANDLE hFile, DWORD dwFlags) {
-    //TODO
+	SERIAL_LOGD("PurgeComm(hFile: %p, dwFlags: 0x%08X) TODO", hFile, dwFlags);
+	if(hFile && hFile->handleType == HANDLE_TYPE_COM)
+		return serialPortPurgeComm(hFile->commId, dwFlags);
     return FALSE;
 }
 BOOL SetCommBreak(HANDLE hFile) {
-    //TODO
-    return FALSE;
+	SERIAL_LOGD("SetCommBreak(hFile: %p)", hFile);
+	if(hFile && hFile->handleType == HANDLE_TYPE_COM)
+		return serialPortSetBreak(hFile->commId);
+	return FALSE;
 }
 BOOL ClearCommBreak(HANDLE hFile) {
-    //TODO
-    return FALSE;
+	SERIAL_LOGD("ClearCommBreak(hFile: %p)", hFile);
+	if(hFile && hFile->handleType == HANDLE_TYPE_COM)
+		return serialPortClearBreak(hFile->commId);
+	return FALSE;
 }
+
 
 int WSAGetLastError() {
     //TODO
@@ -3141,3 +3484,9 @@ int win32_select(int __fd_count, fd_set* __read_fds, fd_set* __write_fds, fd_set
     }
     return select(__fd_count, __read_fds, __write_fds, __exception_fds, __timeout);
 }
+
+int win32_ioctlsocket(SOCKET s, long cmd, u_long FAR * argp) {
+	//TODO
+	return 0;
+}
+

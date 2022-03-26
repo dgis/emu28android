@@ -1,0 +1,24 @@
+Global
+	Print    "================================================="
+	Print    ""
+	Print    "This Real 28C graphic is by Christoph Giesselink."
+	Print    "http://hp.giesselink.com/"
+	Print    "Graphic based on a scan by Hewlett-Packard."
+	Print    ""
+	Print    "================================================="
+	Title    "Christoph's Real HP28C for 800x600"
+	Author   "Christoph Giesselink"
+	Hardware "Centipede"
+	Model    "P"		# Paladin
+#	Class    4		# 4KB RAM (valid entries: 4,32,64)
+	Rom      "HP28C.ROM"
+	Bitmap   "REAL28C.BMP"
+	Debug    0
+End
+
+Background
+	Offset  24 124
+	Size   745 502
+End
+
+Include "REAL28C.KMI"

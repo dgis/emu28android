@@ -3,6 +3,7 @@
     package="org.emulator.twenty.eight">
 
 	<uses-permission android:name="android.permission.VIBRATE" />
+
     <application
 	    android:name="org.emulator.calculator.EmuApplication"
         android:allowBackup="true"
@@ -18,7 +19,7 @@
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
             android:launchMode="singleTop"
             android:theme="@style/AppTheme.NoActionBar"
-	        >
+	        android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

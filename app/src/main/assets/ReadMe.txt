@@ -5,12 +5,11 @@ It uses the Android NDK. The former Emu28 source code (written by Christoph Gies
 This win32 layer will allow to easily update from the original Emu28 source code.
 It can open or save the exact same state files (state.e28) than the original Windows application!
 
-This application does NOT come with the ROM files!
-You will need KML scripts and ROM files already copied into your Android filesystem.
-You can download the KML scripts here: http://regis.cosnier.free.fr/soft/androidEmu28/Emu28-KML-original-134.zip
-Or you can download the KML scripts from the original Emu28 Windows application archive (https://hp.giesselink.com/emu28.htm)
-and you can extract the ROM file from a real calculator (or be lucky on internet).
-Be careful about the case sensitivity of the filename in the KML script (Linux is case sensitive, not Windows).
+
+Some KML files with theirs faceplates are embedded in the application but it is still possible to open a KML file and its dependencies by selecting a folder on your Android file system.
+If you want to modify them, you can download the already embedded KML scripts here: http://regis.cosnier.free.fr/soft/androidEmu28/Emu28-KML-original-134.zip
+Or you can download the KML scripts from the original Emu28 Windows application archive (https://hp.giesselink.com/emu28.htm) and add your ROM files.
+Be careful about the case sensitivity of the filename in the KML script (Linux/Android is case sensitive, not Windows).
 
 The application does not request any permission (because it opens the files or the KML folders using the content:// scheme).
 
@@ -20,19 +19,17 @@ https://github.com/dgis/emu28android
 
 QUICK START
 
-1. From the left side, slide your finger to open the menu.
+1. Click on the 3 dots button at the top left (or from the left side, slide your finger to open the menu).
 2. Touch the "New..." menu item.
-3. "Select a Custom KML script folder..." where you have copied the KML scripts and ROM files.
-4. Pick a calculator.
-5. And the calculator should now be opened.
+3. Select a default calculator (or "[Select a Custom KML script folder...]" where you have copied the KML scripts and ROM files (Android 11 cannot use the folder Download)).
+4. And the calculator should now be opened.
 
 
 NOTES
 
 - For technical reason, this application need the Android 5.0 (API 21).
 - The Help menu displays Emu28's original help HTML page and may not accurately reflect the behavior of this Android version.
-- When using a custom KML script by selecting a folder, you must take care of the case sensitivity of its dependency files.
-- This Emulator does not include the ROM files or the KML files.
+- When using a custom KML script by selecting a folder (Not the folder Download for Android 11), you must take care of the case sensitivity of its dependency files.
 - To speed up printing, set the 'delay' to 0 in the calculator's print options.
 
 
@@ -44,13 +41,27 @@ NOT WORKING YET
 
 CHANGES
 
-Version 1.3 (2020-11-XX)
+Version 1.3 (2022-02-XX)
 
 - Replaces the haptic feedback switch with a slider to adjust the vibration duration.
 - Fix a timer issue which prevented to turn the calculator on after a switch off.
 - Fix transparency issue (RGB -> BGR).
 - Fix a printer issue from Christoph Gießelink's HP82240B Printer Simulator version 1.12.
 - Fix the KML button Type 3 with a Background offset which was not display at the right location (Fix #15). But Type 3 does not work very well with Emu42.
+- Fix an issue which prevents to save all the settings (Save in onPause instead of onStop).
+- The KML folder is now well saved when changing the KML script for a custom one via the menu "Change KML Script...".
+- Fix an issue when the permission to read the KML folder has been lost.
+- Allows pressing a calculator button with the right button of the mouse but prevents its release to allow the On+A+F key combination (with Android version >= 5.0).
+- Open an external web browser when you click an external links in the Help.
+- Show KML log on request.
+- Fix the upside down background of the LCD screen on high contrast (actually, fix a general top-down issue in the bitmap).
+- Add the KML scripts and the calculator images in the application.
+- Remove unneeded code.
+- Display the graphic tab of the printer without antialiasing.
+- Fix a crash about the Most Recently Used state files.
+- Fix an issue with "Copy Screen".
+- Allow to load RLE4, RLE8 and monochrome BMP images.
+- Optimize the number of draw calls when displaying the LCD pixel borders.
 
 
 Version 1.2 (2020-09-07)
