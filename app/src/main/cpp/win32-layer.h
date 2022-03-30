@@ -67,6 +67,7 @@
 #endif
 
 #define _MSC_VER 1914
+#define __unaligned
 #define GetWindowLongPtr	GetWindowLong
 
 

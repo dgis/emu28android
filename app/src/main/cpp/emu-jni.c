@@ -982,6 +982,24 @@ JNIEXPORT void JNICALL Java_org_emulator_calculator_NativeLib_onViewCopy(JNIEnv 
     nxO = nyO = 0;					// origin in HDC
     hSrcDC = hLcdDC;				// use display HDC as source
 
+
+//	TCHAR cBuffer[256];				// temp. buffer for text
+//	// get text display string
+//	GetLcdNumber(cBuffer);
+//	dwLen = (lstrlen(cBuffer) + 1) * sizeof(cBuffer[0]);
+//	// memory allocation for clipboard data
+//	if ((hClipObj = GlobalAlloc(GMEM_MOVEABLE, dwLen)) != NULL)
+//	{
+//		LPTSTR szText = (LPTSTR) GlobalLock(hClipObj);
+//		lstrcpy(szText, cBuffer);
+//#if defined _UNICODE
+//		SetClipboardData(CF_UNICODETEXT, hClipObj);
+//#else
+//		SetClipboardData(CF_TEXT, hClipObj);
+//#endif
+//		GlobalUnlock(hClipObj);
+//	}
+
     hBmp = CreateCompatibleBitmap(hSrcDC,nxSize,nySize);
     hBmpDC = CreateCompatibleDC(hSrcDC);
     hBmp = (HBITMAP) SelectObject(hBmpDC,hBmp);
@@ -1040,6 +1058,28 @@ JNIEXPORT void JNICALL Java_org_emulator_calculator_NativeLib_onViewCopy(JNIEnv 
 
 
     AndroidBitmap_unlockPixels(env, bitmapScreen);
+}
+
+JNIEXPORT void JNICALL Java_org_emulator_calculator_NativeLib_onStackCopyVisible(JNIEnv *env, jobject thisz) {
+	TCHAR cBuffer[256];				// temp. buffer for text
+	HANDLE hClipObj;
+	DWORD dwLen;
+
+	// get text display string
+	GetLcdNumber(cBuffer);
+	dwLen = (lstrlen(cBuffer) + 1) * sizeof(cBuffer[0]);
+	// memory allocation for clipboard data
+	if ((hClipObj = GlobalAlloc(GMEM_MOVEABLE, dwLen)) != NULL)
+	{
+		LPTSTR szText = (LPTSTR) GlobalLock(hClipObj);
+		lstrcpy(szText, cBuffer);
+#if defined _UNICODE
+		SetClipboardData(CF_UNICODETEXT, hClipObj);
+#else
+		SetClipboardData(CF_TEXT, hClipObj);
+#endif
+		GlobalUnlock(hClipObj);
+	}
 }
 
 JNIEXPORT void JNICALL Java_org_emulator_calculator_NativeLib_onStackCopy(JNIEnv *env, jobject thisz) {

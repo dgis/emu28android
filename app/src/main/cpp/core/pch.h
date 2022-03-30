@@ -51,7 +51,14 @@
 #define IDC_HAND            MAKEINTRESOURCE(32649)
 #endif
 
+#if _MSC_VER <= 1200 // MSVC6.0 don't know the LL constant extention, use i64 instead
+#define CLL(x)      x ## i64
+#else
+#define CLL(x)      x ## LL
+#endif
+
 #if _MSC_VER <= 1200 // missing type definition in the MSVC6.0 SDK and earlier
+#define __unaligned
 #define SetWindowLongPtr	SetWindowLong
 #define GetWindowLongPtr	GetWindowLong
 #define SetClassLongPtr		SetClassLong

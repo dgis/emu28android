@@ -13,7 +13,7 @@
 #include "kml.h"
 #include "debugger.h"
 
-#define VERSION   "1.35"
+#define VERSION   "1.36"
 
 #ifdef _DEBUG
 LPCTSTR szNoTitle = _T("Emu28 ")_T(VERSION)_T(" Debug");
@@ -427,7 +427,10 @@ static UINT SaveChanges(BOOL bAuto)
 		if (GetSaveAsFilename())
 		{
 			if (SaveDocumentAs(szBufferFilename))
+			{
+				MruAdd(szBufferFilename);
 				return IDYES;
+			}
 			else
 				return IDCANCEL;
 		}
@@ -435,6 +438,7 @@ static UINT SaveChanges(BOOL bAuto)
 	}
 
 	SaveDocument();
+	MruAdd(szCurrentFilename);
 	return IDYES;
 }
 
@@ -692,25 +696,32 @@ cancel:
 //
 static LRESULT OnFileMruOpen(UINT wID)
 {
-	LPCTSTR lpszFilename;
+	TCHAR szFilename[MAX_PATH];
 
 	wID -= ID_FILE_MRU_FILE1;				// zero based MRU index
-	lpszFilename = MruFilename(wID);		// full filename from MRU list
-	if (lpszFilename == NULL) return 0;		// MRU slot not filled
+
+	// full filename from MRU list
+	MruFilename(wID,szFilename,ARRAYSIZEOF(szFilename));
+	if (*szFilename == 0) return 0;			// MRU slot not filled
 
 	if (bDocumentAvail)
 	{
 		SwitchToState(SM_INVALID);
+		// saving may change MRU index and destroy lpszFilename pointer content
 		if (IDCANCEL == SaveChanges(bAutoSave))
 			goto cancel;
 	}
-	if (!OpenDocument(lpszFilename))		// document loading failed
+	if (!OpenDocument(szFilename))			// document loading failed
 	{
-		MruRemove(wID);						// entry not valid any more
+		wID = MruID(szFilename);			// get actual MRU ID after saving
+		if (wID != (UINT) -1)				// entry still in MRU list
+		{
+			MruRemove(wID);					// entry not valid any more
+		}
 	}
 	else
 	{
-		MruMoveTop(wID);					// move entry to top of MRU list
+		MruAdd(szFilename);					// add entry to top of MRU list
 	}
 cancel:
 	if (pbyRom) SwitchToState(SM_RUN);
@@ -804,6 +815,7 @@ static LRESULT OnViewCopy(VOID)
 			#define WIDTHBYTES(bits) (((bits) + 31) / 32 * 4)
 			#define PALVERSION       0x300
 
+			TCHAR cBuffer[256];				// temp. buffer for text
 			BITMAP bm;
 			LPBITMAPINFOHEADER lpbi;
 			PLOGPALETTE ppal;
@@ -812,6 +824,22 @@ static LRESULT OnViewCopy(VOID)
 			HANDLE hClipObj;
 			WORD wBits;
 			DWORD dwLen, dwSizeImage;
+
+			// get text display string
+			GetLcdNumber(cBuffer);
+			dwLen = (lstrlen(cBuffer) + 1) * sizeof(cBuffer[0]);
+			// memory allocation for clipboard data
+			if ((hClipObj = GlobalAlloc(GMEM_MOVEABLE, dwLen)) != NULL)
+			{
+				LPTSTR szText = (LPTSTR) GlobalLock(hClipObj);
+				lstrcpy(szText, cBuffer);
+				#if defined _UNICODE
+					SetClipboardData(CF_UNICODETEXT, hClipObj);
+				#else
+					SetClipboardData(CF_TEXT, hClipObj);
+				#endif
+				GlobalUnlock(hClipObj);
+			}
 
 			hBmp = CreateCompatibleBitmap(hLcdDC,nxSize,nySize);
 			hBmpDC = CreateCompatibleDC(hLcdDC);

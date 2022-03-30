@@ -125,7 +125,8 @@ extern VOID    MruAdd(LPCTSTR lpszEntry);
 extern VOID    MruRemove(UINT nIndex);
 extern VOID    MruMoveTop(UINT nIndex);
 extern UINT    MruEntries(VOID);
-extern LPCTSTR MruFilename(UINT nIndex);
+extern UINT    MruID(LPCTSTR lpszEntry);
+extern VOID    MruFilename(UINT nIndex, LPTSTR szFilename, UINT nBuffersize);
 extern VOID    MruUpdateMenu(HMENU hMenu);
 extern VOID    MruWriteList(VOID);
 extern VOID    MruReadList(VOID);
@@ -167,6 +168,9 @@ extern VOID  UpdateAnnunciators(DWORD dwUpdateMask);
 extern VOID  StartDisplay(VOID);
 extern VOID  StopDisplay(VOID);
 extern VOID  ResizeWindow(VOID);
+
+// Dispnum.c
+extern VOID GetLcdNumber(LPTSTR szContent);
 
 // Engine.c
 extern CHIPSET Chipset;

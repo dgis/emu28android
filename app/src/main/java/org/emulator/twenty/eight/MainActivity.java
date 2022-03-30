@@ -368,8 +368,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             OnViewCopyFullscreen();
         } else if (id == R.id.nav_copy_screen) {
             OnViewCopy();
+        } else if (id == R.id.nav_copy_stack_visible) {
+	        OnStackCopyVisible();
         } else if (id == R.id.nav_copy_stack) {
-            OnStackCopy();
+	        OnStackCopy();
         } else if (id == R.id.nav_paste_stack) {
             OnStackPaste();
         } else if (id == R.id.nav_reset_calculator) {
@@ -907,6 +909,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             showAlert(e.getMessage());
         }
     }
+	private void OnStackCopyVisible() {
+		NativeLib.onStackCopyVisible();
+	}
     private void OnStackCopy() {
         NativeLib.onStackCopy();
     }
