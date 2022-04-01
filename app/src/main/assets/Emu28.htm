@@ -314,7 +314,12 @@ h3 { color:red; font-size:1.1em; }
     <p>This is only valid for the HP28C emulation. Saves the current object
     on stack level 1 as a HP28C binary object to disk.</p>
   <h2><a name=ss9.3>9.3 Copy Screen</a></h2>
-    <p>Copy the screen content to the clipboard.</p>
+    <p>Copy the screen content in text and bitmap format to the clipboard.
+    The text format work only with the regular font on the regular character
+    positions. Graphic and the soft menu buttons cannot be shown in text
+    mode. The actual used Latin-1 Supplement codepage don't support all
+    text characters, at the position of such a character the MIDDLE DOT
+    U+00B7 character is used in the clipboard text output instead.</p>
   <h2><a name=ss9.4>9.4 Copy Stack</a></h2>
     <p>This is only valid for the HP28C emulation.</p>
     <p>Copy a &quot;Real Number&quot;, &quot;Complex Number&quot; or
@@ -432,7 +437,7 @@ h3 { color:red; font-size:1.1em; }
     </table>
   <h1><a name=s14>14. License</a></h1>
     <p>Emu28 - A HP18C/28C Emulator<br>
-    Copyright (C) 2020 Christoph Gie&szlig;elink</p>
+    Copyright (C) 2022 Christoph Gie&szlig;elink</p>
     <p>This program is free software; you can redistribute it and/or modify it
     under the terms of the GNU General Public License as published by the Free
     Software Foundation; either version 2 of the License, or (at your option)
