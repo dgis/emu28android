@@ -39,7 +39,17 @@ NOT WORKING YET
 - Debugger
 
 
+LINKS
+
+- Original Emu28 for Windows from Christoph Giesselink and Sébastien Carlier: https://hp.giesselink.com/emu28.htm
+- The Museum of HP Calculators Forum: https://www.hpmuseum.org/forum/thread-12540.html
+
+
 CHANGES
+
+Version 1.4 (2023-09-01)
+
+- Update Android API.
 
 Version 1.3 (2022-03-31)
 
