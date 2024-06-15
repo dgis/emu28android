@@ -30,6 +30,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.os.Vibrator;
+import android.os.VibratorManager;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.LayoutInflater;
@@ -163,7 +164,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 	    settings = EmuApplication.getSettings();
 	    settings.setIsDefaultSettings(true);
 
-	    vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+	    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+		    vibrator = ((VibratorManager)getSystemService(Context.VIBRATOR_MANAGER_SERVICE)).getDefaultVibrator();
+	    } else {
+		    // Deprecated in API 31
+	    	vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+	    }
 
         ViewGroup mainScreenContainer = findViewById(R.id.main_screen_container);
         mainScreenView = new MainScreenView(this);
@@ -1410,12 +1416,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 			String romFilename = null;
 			for (DocumentFile file : kmlFolderDocumentFile.listFiles()) {
 				String name = file.getName();
-				if (name != null && name.compareTo(kmlFilename) == 0) {
+				if (name != null && kmlFilename.contains(name)) {
 					try {
 						DocumentFile documentFile = DocumentFile.fromSingleUri(this, file.getUri());
 						if (documentFile != null) {
 							Uri fileUri = documentFile.getUri();
 							romFilename = extractROMFilename(getContentResolver().openInputStream(fileUri));
+							break;
 						}
 					} catch (IOException e) {
 						//log the exception
@@ -2083,7 +2090,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 					"settings_printer_model", "settings_macro",
                     "settings_kml", "settings_port1", "settings_port2",
                     "settings_flash_port2",
-                    "settings_serial_ports_wire", "settings_serial_ports_ir" };
+                    "settings_serial_ports_wire", "settings_serial_ports_ir", "settings_serial_slowdown" };
 			for (String settingKey : settingKeys)
                 updateFromPreferences(settingKey, false);
         } else {
@@ -2212,6 +2219,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 	            case "settings_serial_ports_ir":
 		            //NativeLib.setConfiguration("settings_serial_ports_ir", isDynamicValue, 0, 0,
 				    //        DevicesFragment.SerialConnectParameters.fromSettingsString(settings.getString("settings_serial_ports_ir", "")).toWin32String());
+		            break;
+	            case "settings_serial_slowdown":
+		            //NativeLib.setConfiguration(key, isDynamicValue, settings.getBoolean(key, false) ? 1 : 0, 0, null);
 		            break;
             }
         }

@@ -41,7 +41,7 @@ UINT   nCurrentClass = 0;					// Class -> derivate
 BOOL   bBackup = FALSE;
 
 // document signatures
-static BYTE pbySignature[] = "Emu28 Document\xFE";
+static CONST BYTE bySignature[] = "Emu28 Document\xFE";
 static HANDLE hCurrentFile = NULL;
 
 static CHIPSET BackupChipset;
@@ -417,7 +417,7 @@ BOOL CrcRom(WORD *pwChk)					// calculate fingerprint of ROM
 	// use checksum, because it's faster
 	while (dwSize-- > 0)
 	{
-		DWORD dwData = *pdwData++;
+		CONST DWORD dwData = *pdwData++;
 		if ((dwData & 0xF0F0F0F0) != 0)		// data packed?
 			return FALSE;
 		dwChk += dwData;
@@ -460,6 +460,19 @@ static enum ROMVER RomType(VOID)
 	default:         eType = V_UNKNOWN; break;
 	}
 	return eType;
+}
+
+static __inline VOID UnpackRom(DWORD dwSrcOff, DWORD dwDestOff)
+{
+	LPBYTE pbySrc = pbyRom + dwSrcOff;		// source start address
+	LPBYTE pbyDest = pbyRom + dwDestOff;	// destination start address
+	while (pbySrc != pbyDest)				// unpack source
+	{
+		CONST BYTE byValue = *(--pbySrc);
+		*(--pbyDest) = byValue >> 4;
+		*(--pbyDest) = byValue & 0xF;
+	}
+	return;
 }
 
 BOOL MapRom(LPCTSTR szFilename)
@@ -511,14 +524,7 @@ BOOL MapRom(LPCTSTR szFilename)
 
 	if (dwRomSize != dwFileSize)			// packed ROM image
 	{
-		dwSize = dwRomSize;					// destination start address
-		while (dwFileSize > 0)				// unpack source
-		{
-			BYTE byValue = pbyRom[--dwFileSize];
-			_ASSERT(dwSize >= 2);
-			pbyRom[--dwSize] = byValue >> 4;
-			pbyRom[--dwSize] = byValue & 0xF;
-		}
+		UnpackRom(dwFileSize,dwRomSize);	// unpack ROM data
 	}
 	return TRUE;
 }
@@ -526,40 +532,30 @@ BOOL MapRom(LPCTSTR szFilename)
 BOOL MapRomBmp(HBITMAP hBmp)
 {
 	// look for an integrated ROM image
-	BOOL bBitmapROM = SteganoDecodeHBm(&pbyRom,&dwRomSize,8,hBmp) == STG_NOERROR;
+	CONST BOOL bBitmapROM = SteganoDecodeHBm(&pbyRom,&dwRomSize,8,hBmp) == STG_NOERROR;
 
 	if (bBitmapROM)							// has data inside
 	{
-		DWORD dwSrc,dwDest;
-		unsigned uError;
+		DWORD  dwDataSize;
 
 		LPBYTE pbyOutData = NULL;
 		size_t nOutData = 0;
 
 		// try to decompress data
-		uError = lodepng_zlib_decompress(&pbyOutData,&nOutData,pbyRom,dwRomSize,
-										 &lodepng_default_decompress_settings);
-
-		if (uError == 0)					// data decompression successful
+		if (lodepng_zlib_decompress(&pbyOutData,&nOutData,pbyRom,dwRomSize,
+									&lodepng_default_decompress_settings) == 0)
 		{
+			// data decompression successful
 			free(pbyRom);					// free compressed data
 			pbyRom = pbyOutData;			// use decompressed instead
 			dwRomSize = (DWORD) nOutData;
 		}
 
-		dwSrc = dwRomSize;					// source start address
+		dwDataSize = dwRomSize;				// packed ROM image size
 
 		dwRomSize *= 2;						// unpacked ROM image has double size
 		pbyRom = (LPBYTE) realloc(pbyRom,dwRomSize);
-
-		dwDest = dwRomSize;					// destination start address
-		while (dwSrc > 0)					// unpack source
-		{
-			BYTE byValue = pbyRom[--dwSrc];
-			_ASSERT(dwDest >= 2);
-			pbyRom[--dwDest] = byValue >> 4;
-			pbyRom[--dwDest] = byValue & 0xF;
-		}
+		UnpackRom(dwDataSize,dwRomSize);	// unpack ROM data
 	}
 	return bBitmapROM;
 }
@@ -651,7 +647,8 @@ BOOL NewDocument(VOID)
 
 	if (EXTMEM)								// allocate external memory
 	{
-		VERIFY(pbyRamExt = (LPBYTE) calloc(EXTMEM,sizeof(*pbyRamExt)));
+		pbyRamExt = (LPBYTE) calloc(EXTMEM,sizeof(*pbyRamExt));
+		if (pbyRamExt == NULL) goto restore;
 	}
 
 	LoadBreakpointList(NULL);				// clear debugger breakpoint list
@@ -669,8 +666,7 @@ BOOL OpenDocument(LPCTSTR szFilename)
 
 	HANDLE hFile = INVALID_HANDLE_VALUE;
 	DWORD  lBytesRead,lSizeofChipset;
-	BYTE   pbyFileSignature[sizeof(pbySignature)];
-	UINT   ctBytesCompared;
+	BYTE   byFileSignature[sizeof(bySignature)];
 	UINT   nLength;
 
 	// Open file
@@ -691,14 +687,11 @@ BOOL OpenDocument(LPCTSTR szFilename)
 	}
 
 	// Read and Compare Emu28 1.0 format signature
-	ReadFile(hFile, pbyFileSignature, sizeof(pbyFileSignature), &lBytesRead, NULL);
-	for (ctBytesCompared=0; ctBytesCompared<sizeof(pbyFileSignature); ctBytesCompared++)
+	ReadFile(hFile, byFileSignature, sizeof(byFileSignature), &lBytesRead, NULL);
+	if (memcmp(byFileSignature,bySignature,sizeof(byFileSignature)) != 0)
 	{
-		if (pbyFileSignature[ctBytesCompared]!=pbySignature[ctBytesCompared])
-		{
-			AbortMessage(_T("This file is not a valid Emu28 document."));
-			goto restore;
-		}
+		AbortMessage(_T("This file is not a valid Emu28 document."));
+		goto restore;
 	}
 
 	// read length of KML script name
@@ -782,9 +775,7 @@ BOOL OpenDocument(LPCTSTR szFilename)
 	{
 		if (szCurrentKml[0])				// KML file name
 		{
-			BOOL bOK;
-
-			bOK = InitKML(szCurrentKml,FALSE);
+			BOOL bOK = InitKML(szCurrentKml,FALSE);
 			bOK = bOK && (cCurrentRomType == Chipset.type);
 			if (bOK) break;
 
@@ -849,7 +840,7 @@ BOOL SaveDocument(VOID)
 
 	SetFilePointer(hCurrentFile,0,NULL,FILE_BEGIN);
 
-	if (!WriteFile(hCurrentFile, pbySignature, sizeof(pbySignature), &lBytesWritten, NULL))
+	if (!WriteFile(hCurrentFile, bySignature, sizeof(bySignature), &lBytesWritten, NULL))
 	{
 		AbortMessage(_T("Could not write into file !"));
 		return FALSE;
@@ -922,6 +913,8 @@ BOOL SaveBackup(VOID)
 {
 	WINDOWPLACEMENT wndpl;
 
+	BOOL bSucc = TRUE;
+
 	if (!bDocumentAvail) return FALSE;
 
 	_ASSERT(nState != SM_RUN);				// emulation engine is running
@@ -944,16 +937,22 @@ BOOL SaveBackup(VOID)
 	if (EXTMEM)								// external RAM
 	{
 		pbyBackupRamExt = (LPBYTE) malloc(EXTMEM);
-		CopyMemory(pbyBackupRamExt,pbyRamExt,EXTMEM);
+		if (pbyBackupRamExt)
+		{
+			CopyMemory(pbyBackupRamExt,pbyRamExt,EXTMEM);
+		}
+		bSucc = bSucc && (pbyBackupRamExt != NULL);
 	}
 	CreateBackupBreakpointList();
-	bBackup = TRUE;
-	return TRUE;
+	bBackup = bSucc;
+	return bSucc;
 }
 
 BOOL RestoreBackup(VOID)
 {
 	BOOL bDbgOpen;
+
+	BOOL bSucc = TRUE;
 
 	if (!bBackup) return FALSE;
 
@@ -981,14 +980,22 @@ BOOL RestoreBackup(VOID)
 	if (EXTMEM)								// external RAM
 	{
 		pbyRamExt = (LPBYTE) malloc(EXTMEM);
-		CopyMemory(pbyRamExt,pbyBackupRamExt,EXTMEM);
+		if (pbyRamExt)
+		{
+			CopyMemory(pbyRamExt,pbyBackupRamExt,EXTMEM);
+		}
+		bSucc = bSucc && (pbyRamExt != NULL);
 	}
 	SetWindowPathTitle(szCurrentFilename);	// update window title line
 	SetWindowLocation(hWnd,Chipset.nPosX,Chipset.nPosY);
 	RestoreBackupBreakpointList();			// restore the debugger breakpoint list
 	if (bDbgOpen) OnToolDebug();			// reopen the debugger
-	bDocumentAvail = TRUE;					// document available
-	return TRUE;
+	if (!bSucc)								// restore not successful (memory allocation errors)
+	{
+		ResetDocument();					// cleanup remainders
+	}
+	bDocumentAvail = bSucc;					// document available
+	return bSucc;
 }
 
 BOOL ResetBackup(VOID)
@@ -2208,7 +2215,6 @@ HRGN CreateRgnFromBitmap(HBITMAP hBmp,COLORREF color,DWORD dwTol)
 	BOOL (*fnColorCmp)(DWORD dwColor1,DWORD dwColor2,DWORD dwTol);
 
 	DWORD dwRed,dwGreen,dwBlue;
-	HRGN hRgn;
 	LPRGNDATA pRgnData;
 	LPBITMAPINFO bi;
 	LPBYTE pbyBits;
@@ -2219,6 +2225,8 @@ HRGN CreateRgnFromBitmap(HBITMAP hBmp,COLORREF color,DWORD dwTol)
 	LONG x,y,xleft;
 	BOOL bFoundLeft;
 	BOOL bIsMask;
+
+	HRGN hRgn = NULL;						// no region defined
 
 	if (dwTol >= 1000)						// use CIE L*a*b compare
 	{
@@ -2231,7 +2239,10 @@ HRGN CreateRgnFromBitmap(HBITMAP hBmp,COLORREF color,DWORD dwTol)
 	}
 
 	// allocate memory for extended image information incl. RGBQUAD color table
-	bi = (LPBITMAPINFO) calloc(1,sizeof(BITMAPINFOHEADER) + 256 * sizeof(RGBQUAD));
+	if ((bi = (LPBITMAPINFO) calloc(1,sizeof(BITMAPINFOHEADER) + 256 * sizeof(RGBQUAD))) == NULL)
+	{
+		return hRgn;						// no region
+	}
 	bi->bmiHeader.biSize = sizeof(bi->bmiHeader);
 	_ASSERT(bi->bmiHeader.biBitCount == 0); // for query without color table
 
@@ -2250,7 +2261,11 @@ HRGN CreateRgnFromBitmap(HBITMAP hBmp,COLORREF color,DWORD dwTol)
 	}
 
 	// allocate memory for image data (colors)
-	pbyBits = (LPBYTE) malloc(bi->bmiHeader.biSizeImage);
+	if ((pbyBits = (LPBYTE) malloc(bi->bmiHeader.biSizeImage)) == NULL)
+	{
+		free(bi);							// free bitmap info
+		return hRgn;						// no region
+	}
 
 	// fill bits buffer
 	GetDIBits(hWindowDC,hBmp,0,bi->bmiHeader.biHeight,pbyBits,bi,DIB_RGB_COLORS);
@@ -2295,18 +2310,20 @@ HRGN CreateRgnFromBitmap(HBITMAP hBmp,COLORREF color,DWORD dwTol)
 
 	// allocate memory for region data
 	pRgnData = (PRGNDATA) malloc(sizeof(RGNDATAHEADER) + dwRectsCount * sizeof(RECT));
+	if (pRgnData)
+	{
+		// fill it by default
+		ZeroMemory(&pRgnData->rdh,sizeof(pRgnData->rdh));
+		pRgnData->rdh.dwSize = sizeof(pRgnData->rdh);
+		pRgnData->rdh.iType = RDH_RECTANGLES;
+		SetRect(&pRgnData->rdh.rcBound,MAXLONG,MAXLONG,0,0);
+	}
 
-	// fill it by default
-	ZeroMemory(&pRgnData->rdh,sizeof(pRgnData->rdh));
-	pRgnData->rdh.dwSize = sizeof(pRgnData->rdh);
-	pRgnData->rdh.iType	 = RDH_RECTANGLES;
-	SetRect(&pRgnData->rdh.rcBound,MAXLONG,MAXLONG,0,0);
-
-	for (y = 0; y < bi->bmiHeader.biHeight; ++y)
+	for (y = 0; pRgnData && y < bi->bmiHeader.biHeight; ++y)
 	{
 		LPBYTE pbyLineStart = pbyColor;
 
-		for (x = 0; x < bi->bmiHeader.biWidth; ++x)
+		for (x = 0; pRgnData && x < bi->bmiHeader.biWidth; ++x)
 		{
 			// get color
 			switch (bi->bmiHeader.biBitCount)
@@ -2363,9 +2380,19 @@ HRGN CreateRgnFromBitmap(HBITMAP hBmp,COLORREF color,DWORD dwTol)
 					// if buffer full reallocate it with more room
 					if (pRgnData->rdh.nCount >= dwRectsCount)
 					{
-						dwRectsCount += ADD_RECTS_COUNT;
+						LPRGNDATA pNewRgnData;
 
-						pRgnData = (LPRGNDATA) realloc(pRgnData,sizeof(RGNDATAHEADER) + dwRectsCount * sizeof(RECT));
+						dwRectsCount += ADD_RECTS_COUNT;
+						pNewRgnData = (LPRGNDATA) realloc(pRgnData,sizeof(RGNDATAHEADER) + dwRectsCount * sizeof(RECT));
+						if (pNewRgnData)
+						{
+							pRgnData = pNewRgnData;
+						}
+						else
+						{
+							free(pRgnData);
+							pRgnData = NULL;
+						}
 					}
 
 					bFoundLeft = FALSE;
@@ -2380,10 +2407,11 @@ HRGN CreateRgnFromBitmap(HBITMAP hBmp,COLORREF color,DWORD dwTol)
 	free(pbyBits);
 	free(bi);
 
-	// create region
-	hRgn = ExtCreateRegion(NULL,sizeof(RGNDATAHEADER) + pRgnData->rdh.nCount * sizeof(RECT),pRgnData);
-
-	free(pRgnData);
+	if (pRgnData)							// has region data, create region
+	{
+		hRgn = ExtCreateRegion(NULL,sizeof(RGNDATAHEADER) + pRgnData->rdh.nCount * sizeof(RECT),pRgnData);
+		free(pRgnData);
+	}
 	return hRgn;
 	#undef ADD_RECTS_COUNT
 }

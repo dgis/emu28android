@@ -130,6 +130,7 @@
     <string name="message_printer_out_of_paper">Out of paper error for the graphic printer (max line: %d, max pixel line: %d).</string>
     <string name="message_change_overlapping_lcd_mode_to_manual">The overlapping LCD mode has been changed to "Manual".</string>
     <string name="message_change_overlapping_lcd_mode_to_auto">The overlapping LCD mode has been changed to "Auto".</string>
+	<string name="message_persisting_security_error">Permission issue: </string>
 
 	<string name="serial_fragment_title">USB Devices</string>
 	<string name="serial_device_list_header">USB Devices</string>
@@ -224,5 +225,6 @@
 	<string name="settings_category_serial_ports_title">Serial Ports (Please allow USB OTG)</string>
 	<string name="settings_serial_ports_wire_title">Wire</string>
 	<string name="settings_serial_ports_ir_title">Infrared (2400 baud only)</string>
+	<string name="settings_serial_slowdown">Slowdown transmission (prevent errors with 9600 baud)</string>
 
 </resources>

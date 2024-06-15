@@ -42,6 +42,7 @@ BOOL settingsPort2en;
 BOOL settingsPort2wr;
 BOOL soundAvailable = FALSE;
 BOOL soundEnabled = FALSE;
+BOOL serialPortSlowDown = FALSE;
 
 
 
@@ -518,12 +519,15 @@ JNIEXPORT void JNICALL Java_org_emulator_calculator_NativeLib_stop(JNIEnv *env, 
 	hWindowDC = NULL;						// hWindowDC isn't valid any more
 	hWnd = NULL;
 
-    DeleteCriticalSection(&csGDILock);
-	DeleteCriticalSection(&csLcdLock);
-	DeleteCriticalSection(&csKeyLock);
-	DeleteCriticalSection(&csTLock);
-	DeleteCriticalSection(&csSlowLock);
-	DeleteCriticalSection(&csDbgLock);
+	// Prevent crash+++
+	// FORTIFY: pthread_mutex_destroy called on a destroyed mutex (0x<sanitized>)
+    // DeleteCriticalSection(&csGDILock);
+	// DeleteCriticalSection(&csLcdLock);
+	// DeleteCriticalSection(&csKeyLock);
+	// DeleteCriticalSection(&csTLock);
+	// DeleteCriticalSection(&csSlowLock);
+	// DeleteCriticalSection(&csDbgLock);
+	// Prevent crash---
 
     SoundClose();							// close waveform-audio output device
     soundEnabled = FALSE;

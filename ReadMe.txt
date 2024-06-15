@@ -21,7 +21,7 @@ QUICK START
 
 1. Click on the 3 dots button at the top left (or from the left side, slide your finger to open the menu).
 2. Touch the "New..." menu item.
-3. Select a default calculator (or "[Select a Custom KML script folder...]" where you have copied the KML scripts and ROM files (Android 11 cannot use the folder Download)).
+3. Select a default calculator (or "[Select a Custom KML script folder...]" where you have copied the KML scripts and ROM files (Android 11 may not be able to use the Download folder)).
 4. And the calculator should now be opened.
 
 
@@ -39,7 +39,17 @@ NOT WORKING YET
 - Debugger
 
 
+LINKS
+
+- Original Emu28 for Windows from Christoph Giesselink and Sébastien Carlier: https://hp.giesselink.com/emu28.htm
+- The Museum of HP Calculators Forum: https://www.hpmuseum.org/forum/thread-12540.html
+
+
 CHANGES
+
+Version 1.4 (2023-09-01)
+
+- Update Android API.
 
 Version 1.3 (2022-03-31)
 
