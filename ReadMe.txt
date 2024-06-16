@@ -51,6 +51,7 @@ Version 1.5 (2024-06-16)
 
 - Update from the original source code Emu28 version 1.37 from Christoph Gießelink.
 - Fix a background issue for annunciators in the Win32 layer.
+- Fix haptic feedback with Android 12 (API deprecation).
 
 
 Version 1.4 (2023-09-01)
