@@ -257,6 +257,11 @@ VOID CreateLcdBitmap(VOID)
 	SelectPalette(hLcdDC,hPalette,FALSE);	// set palette for LCD DC
 	RealizePalette(hLcdDC);					// realize palette
 
+	if (hAnnunDC == NULL)					// no external LCD bitmap
+	{
+		CreateAnnunBitmapFromMain();		// create annunciator bitmap from background bitmap
+	}
+
 	UpdateContrast(Chipset.contrast);		// initialize background
 
 	EnterCriticalSection(&csGDILock);		// solving NT GDI problems
@@ -358,6 +363,163 @@ BOOL CreateAnnunBitmap(LPCTSTR szFilename)
 	}
 	hAnnunBitmap = (HBITMAP) SelectObject(hAnnunDC,hAnnunBitmap);
 	return TRUE;
+}
+
+//
+// create annunciator bitmap from background bitmap
+//
+BOOL CreateAnnunBitmapFromMain(VOID)
+{
+	BITMAPINFO bmi;
+	LPDWORD pdwData, pdwRGBPixel;
+	BYTE    byLuminanceMin, byLuminanceMax, byLuminanceMean;
+	UINT    i, nAnnIdx, nPixelSize;
+
+	// annunciator bitmap
+	ZeroMemory(&bmi,sizeof(bmi));
+	bmi.bmiHeader.biSize = sizeof(bmi.bmiHeader);
+	bmi.bmiHeader.biPlanes = 1;
+	bmi.bmiHeader.biBitCount = 32;			// use 32 bit bitmap for easier buffer calculation
+	bmi.bmiHeader.biCompression = BI_RGB;
+
+	// 1st pass, get size for annunciator bitmap
+	for (nAnnIdx = 0, i = 0; i < ARRAYSIZEOF(pAnnunciator); ++i)
+	{
+		// annunciator has a dimension
+		if (pAnnunciator[i].nCx * pAnnunciator[i].nCy > 0)
+		{
+			// quit for opaque annunciators
+			if (pAnnunciator[i].bOpaque == TRUE)
+				return TRUE;				// quit with success
+
+			bmi.bmiHeader.biWidth += pAnnunciator[i].nCx;
+			if ((LONG) pAnnunciator[i].nCy > bmi.bmiHeader.biHeight)
+			{
+				bmi.bmiHeader.biHeight = pAnnunciator[i].nCy;
+				nAnnIdx = i;				// index of annunciator with maximum height
+			}
+		}
+	}
+
+	// no. of Pixel
+	nPixelSize = bmi.bmiHeader.biHeight * bmi.bmiHeader.biWidth;
+
+	if (nPixelSize == 0)					// annunciator size = 0
+		return TRUE;						// success
+
+	// create annunciator bitmap buffer
+	VERIFY(hAnnunBitmap = CreateDIBSection(hWindowDC,
+										   &bmi,
+										   DIB_RGB_COLORS,
+										   (VOID **)&pdwData,
+										   NULL,
+										   0));
+	if (hAnnunBitmap == NULL) return FALSE;
+
+	// check pixel buffer alignment for ARM CPU
+	_ASSERT((DWORD_PTR) pdwData % sizeof(DWORD) == 0);
+
+	VERIFY(hAnnunDC = CreateCompatibleDC(hWindowDC));
+	hAnnunBitmap = (HBITMAP) SelectObject(hAnnunDC,hAnnunBitmap);
+
+	EnterCriticalSection(&csGDILock);		// solving NT GDI problems
+	{
+		// copy one annunciator pixel to begin of bitmap buffer
+		BitBlt(hAnnunDC, 0, bmi.bmiHeader.biHeight - 1, 1, 1,
+			   hMainDC, pAnnunciator[nAnnIdx].nDx, pAnnunciator[nAnnIdx].nDy, SRCCOPY);
+		GdiFlush();
+	}
+	LeaveCriticalSection(&csGDILock);
+
+	// fill annunciator bitmap with a annunciator color
+	{
+		// get annunciator color (doesn't matter if fore- or background color)
+		CONST DWORD dwColor = *pdwData;		// bottom up bitmap
+
+		for (pdwRGBPixel = pdwData, i = nPixelSize; i > 1; --i)
+		{
+			*++pdwRGBPixel = dwColor;		// and fill
+		}
+	}
+
+	EnterCriticalSection(&csGDILock);		// solving NT GDI problems
+	{
+		UINT x = 0;							// bitmap target position
+
+		// 2nd pass, copy annunciators into annunciator bitmap
+		for (i = 0; i < ARRAYSIZEOF(pAnnunciator); ++i)
+		{
+			// annunciator has a dimension
+			if (pAnnunciator[i].nCx * pAnnunciator[i].nCy > 0)
+			{
+				_ASSERT((LONG) x < bmi.bmiHeader.biWidth);
+				_ASSERT((LONG) pAnnunciator[i].nCy <= bmi.bmiHeader.biHeight);
+
+				// copy annunciator to annunciator bitmap
+				BitBlt(hAnnunDC, x, 0, pAnnunciator[i].nCx, pAnnunciator[i].nCy,
+					   hMainDC, pAnnunciator[i].nDx, pAnnunciator[i].nDy, SRCCOPY);
+
+				pAnnunciator[i].nDx = x;	// new annunciator down position
+				pAnnunciator[i].nDy = 0;
+
+				x += pAnnunciator[i].nCx;	// next position
+			}
+		}
+		GdiFlush();
+	}
+	LeaveCriticalSection(&csGDILock);
+
+	// convert to grayscale and get min/max value
+	byLuminanceMin = 0xFF; byLuminanceMax = 0x00;
+	for (pdwRGBPixel = pdwData, i = nPixelSize; i > 0; --i)
+	{
+		CONST LPBYTE pbyRGBPixel = (LPBYTE) pdwRGBPixel;
+
+		// NTSC formula for grayscale: 0.299 * Red + 0.587 * Green + 0.114 * Blue
+		DWORD dwLuminance = pbyRGBPixel[0] * 114		// blue
+						  + pbyRGBPixel[1] * 587		// green
+						  + pbyRGBPixel[2] * 299;		// red
+		*pbyRGBPixel = (BYTE) (dwLuminance / 1000);		// set grayscale value to blue
+
+		if (*pbyRGBPixel < byLuminanceMin) byLuminanceMin = *pbyRGBPixel;
+		if (*pbyRGBPixel > byLuminanceMax) byLuminanceMax = *pbyRGBPixel;
+
+		++pdwRGBPixel;						// next pixel
+	}
+
+	// convert to black & white bitmap
+	byLuminanceMean = (BYTE) (((WORD) byLuminanceMin + (WORD) byLuminanceMax) / 2);
+	for (pdwRGBPixel = pdwData, i = nPixelSize; i > 0; --i)
+	{
+		// paint white or black dependent on luminance of blue
+		*pdwRGBPixel++ = (*(LPBYTE) pdwRGBPixel >= byLuminanceMean) ? W : B;
+	}
+
+	#if defined DEBUG_WRITEBMP
+	// write mask to file
+	{
+		HANDLE hFile;
+
+		hFile = CreateFile(_T("amask.bmp"), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+		if (hFile != INVALID_HANDLE_VALUE)
+		{
+			BITMAPFILEHEADER bfh;
+			DWORD  dwWritten;
+
+			bfh.bfType = 0x4D42;
+			bfh.bfSize = sizeof(bfh) + sizeof(bmi) + nPixelSize * 4;
+			bfh.bfReserved1 = 0;
+			bfh.bfReserved2 = 0;
+			bfh.bfOffBits = sizeof(bfh) + sizeof(bmi);
+
+			WriteFile(hFile,&bfh,sizeof(bfh),&dwWritten,NULL);
+			WriteFile(hFile,&bmi,sizeof(bmi),&dwWritten,NULL);
+			WriteFile(hFile,pdwData,nPixelSize * 4,&dwWritten,NULL);
+			CloseHandle(hFile);
+		}
+	}
+	#endif
+	return TRUE;							// success
 }
 
 //

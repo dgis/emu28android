@@ -1372,6 +1372,7 @@ extern BOOL SetCommState(HANDLE hFile, LPDCB lpDCB);
 extern BOOL PurgeComm(HANDLE hFile, DWORD dwFlags);
 extern BOOL SetCommBreak(HANDLE hFile);
 extern BOOL ClearCommBreak(HANDLE hFile);
+extern BOOL serialPortSlowDown;
 
 // TCP
 

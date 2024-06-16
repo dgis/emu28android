@@ -5,7 +5,7 @@ apply plugin: 'com.android.application'
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
 def canSign = false
-if(keystorePropertiesFile.exists()) {
+if (keystorePropertiesFile.exists()) {
     canSign = true
     println("The release flavor will signed in the folder app/build/outputs/apk/release/")
 
@@ -28,25 +28,19 @@ if(keystorePropertiesFile.exists()) {
 }
 
 android {
-    compileSdk 33
+    namespace 'org.emulator.twenty.eight'
+    compileSdk 34
     defaultConfig {
         applicationId "org.emulator.twenty.eight"
-        minSdkVersion 21
-        targetSdkVersion 33
-        versionCode 7
-        versionName "1.4"
+        minSdk 21
+        targetSdk 34
+        versionCode 8
+        versionName "1.5"
         setProperty("archivesBaseName", "Emu28-v$versionName")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        externalNativeBuild {
-            cmake {
-                //abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'
-                //abiFilters 'x86_64'
-                //version "3.10.2"
-            }
-        }
     }
 
-    if(canSign) {
+    if (canSign) {
         signingConfigs {
             release {
                 storeFile file(keystoreProperties['storeFile'])
@@ -62,31 +56,38 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if(canSign) {
+            if (canSign) {
                 signingConfig signingConfigs.release
+            }
+
+            ndk {
+                debugSymbolLevel 'FULL' // { SYMBOL_TABLE | FULL }
             }
         }
     }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
     externalNativeBuild {
         cmake {
-            path "CMakeLists.txt"
+            path file('CMakeLists.txt')
         }
     }
-    compileOptions {
-        sourceCompatibility = '1.8'
-        targetCompatibility = '1.8'
-    }
-    namespace 'org.emulator.twenty.eight'
+    ndkVersion '25.1.8937393'
 }
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'com.google.android.material:material:1.12.0'
     implementation 'androidx.preference:preference:1.2.1'
-    implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.documentfile:documentfile:1.0.1'
+    implementation 'androidx.test.espresso:espresso-contrib:3.5.1'
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test:runner:1.5.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    androidTestImplementation 'androidx.test:rules:1.5.0'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
 }

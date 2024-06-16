@@ -341,7 +341,8 @@ BOOL WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite,LPDWO
 		SERIAL_LOGD("WriteFile(hFile: %p, lpBuffer: 0x%08x, nNumberOfBytesToWrite: %d) -> %d bytes\n%s", hFile, lpBuffer, nNumberOfBytesToWrite, writenByteCount, hexAsciiDump);
 		free(hexAsciiDump);
 #endif
-		Sleep(4); // Seems to be needed else the kermit packet does not fully reach the genuine calculator.
+		if(serialPortSlowDown)
+			Sleep(4); // Seems to be needed else kermit/XSend packets do not fully reach the genuine calculator.
 		if(lpNumberOfBytesWritten)
 			*lpNumberOfBytesWritten = (DWORD) writenByteCount;
 		return writenByteCount >= 0;
@@ -1878,6 +1879,8 @@ HPALETTE CreatePalette(CONST LOGPALETTE * plpal) {
     return handle;
 }
 HPALETTE SelectPalette(HDC hdc, HPALETTE hPal, BOOL bForceBkgd) {
+	if(!hdc)
+		return NULL;
     HPALETTE hOldPal = hdc->selectedPalette;
     hdc->selectedPalette = hPal;
     return hOldPal;
@@ -2312,7 +2315,7 @@ void StretchBltInternal(int xDest, int yDest, int wDest, int hDest,
                     // black pixels on a white background.
                     BYTE * destinationPixel = destinationPixelBase + (x >> 3);
 	                UINT bitNumber = (UINT) (7 - (x % 8));
-                    if(backgroundColor == sourceColor) {
+                    if((backgroundColor & 0xFFFFFF) == (sourceColor & 0xFFFFFF)) {
                         *destinationPixel |= (1 << bitNumber); // 1 White
                     } else {
                         *destinationPixel &= ~(1 << bitNumber); // 0 Black

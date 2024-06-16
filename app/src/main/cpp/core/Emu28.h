@@ -161,6 +161,7 @@ extern VOID  DestroyLcdBitmap(VOID);
 extern BOOL  CreateMainBitmap(LPCTSTR szFilename);
 extern VOID  DestroyMainBitmap(VOID);
 extern BOOL  CreateAnnunBitmap(LPCTSTR szFilename);
+extern BOOL  CreateAnnunBitmapFromMain(VOID);
 extern VOID  SetAnnunBitmap(HDC hDC, HBITMAP hBitmap);
 extern VOID  DestroyAnnunBitmap(VOID);
 extern VOID  UpdateMainDisplay(VOID);

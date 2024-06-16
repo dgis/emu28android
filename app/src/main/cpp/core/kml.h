@@ -116,6 +116,7 @@ typedef struct KmlAnnunciator
 } KmlAnnunciator;
 
 extern KmlBlock* pKml;
+extern KmlAnnunciator pAnnunciator[7];
 extern BOOL DisplayChooseKml(CHAR cType);
 extern VOID FreeBlocks(KmlBlock* pBlock);
 extern VOID DrawAnnunciator(UINT nId, BOOL bOn, DWORD dwColor);
