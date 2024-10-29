@@ -78,11 +78,11 @@ VOID SetWindowLocation(HWND hWnd,INT nPosX,INT nPosY)
 
 DWORD GetCutPathName(LPCTSTR szFileName, LPTSTR szBuffer, DWORD dwBufferLength, INT nCutLength)
 {
-	TCHAR  cPath[_MAX_PATH];				// full file name
-	TCHAR  cDrive[_MAX_DRIVE];
-	TCHAR  cDir[_MAX_DIR];
-	TCHAR  cFname[_MAX_FNAME];
-	TCHAR  cExt[_MAX_EXT];
+	TCHAR cPath[_MAX_PATH];					// full file name
+	TCHAR cDrive[_MAX_DRIVE];
+	TCHAR cDir[_MAX_DIR];
+	TCHAR cFname[_MAX_FNAME];
+	TCHAR cExt[_MAX_EXT];
 
 	_ASSERT(nCutLength >= 0);				// 0 = only drive and name
 
@@ -531,9 +531,12 @@ BOOL MapRom(LPCTSTR szFilename)
 
 BOOL MapRomBmp(HBITMAP hBmp)
 {
-	// look for an integrated ROM image
-	CONST BOOL bBitmapROM = SteganoDecodeHBm(&pbyRom,&dwRomSize,8,hBmp) == STG_NOERROR;
+	BOOL bBitmapROM;
 
+	_ASSERT(pbyRom == NULL);				// no ROM must be loaded
+
+	// look for an integrated ROM image
+	bBitmapROM = SteganoDecodeHBm(&pbyRom, &dwRomSize, 8, hBmp) == STG_NOERROR;
 	if (bBitmapROM)							// has data inside
 	{
 		DWORD  dwDataSize;
@@ -542,27 +545,35 @@ BOOL MapRomBmp(HBITMAP hBmp)
 		size_t nOutData = 0;
 
 		// try to decompress data
-		if (lodepng_zlib_decompress(&pbyOutData,&nOutData,pbyRom,dwRomSize,
-									&lodepng_default_decompress_settings) == 0)
+		if (lodepng_zlib_decompress(&pbyOutData, &nOutData, pbyRom, dwRomSize,
+			&lodepng_default_decompress_settings) == 0)
 		{
-			// data decompression successful
+			// data decompress successful
 			free(pbyRom);					// free compressed data
 			pbyRom = pbyOutData;			// use decompressed instead
-			dwRomSize = (DWORD) nOutData;
+			dwRomSize = (DWORD)nOutData;
 		}
 
 		dwDataSize = dwRomSize;				// packed ROM image size
-
 		dwRomSize *= 2;						// unpacked ROM image has double size
-		pbyRom = (LPBYTE) realloc(pbyRom,dwRomSize);
-		UnpackRom(dwDataSize,dwRomSize);	// unpack ROM data
+		pbyOutData = (LPBYTE)realloc(pbyRom, dwRomSize);
+		if (pbyOutData != NULL)
+		{
+			pbyRom = pbyOutData;
+			UnpackRom(dwDataSize, dwRomSize); // unpack ROM data
+		}
+		else
+		{
+			free(pbyRom);
+			pbyRom = NULL;
+			bBitmapROM = FALSE;
+		}
 	}
 	return bBitmapROM;
 }
 
 VOID UnmapRom(VOID)
 {
-	if (pbyRom == NULL) return;
 	free(pbyRom);
 	pbyRom = NULL;
 	dwRomSize = 0;
@@ -1549,8 +1560,7 @@ static HBITMAP DecodeGif(LPBMPFILE pBmp,DWORD *pdwTransparentColor,BOOL bPalette
 		|| ReadGifWord(pBmp,&nHeight)
 		|| ReadGifByte(pBmp,&nInfo)
 		|| ReadGifByte(pBmp,&nBackground)
-		|| ReadGifByte(pBmp,&nZero)
-		|| nZero != 0)
+		|| ReadGifByte(pBmp,&nZero))
 		goto quit;
 
 	ZeroMemory(&bmi,sizeof(bmi));			// init bitmap info
@@ -2079,10 +2089,7 @@ static HBITMAP DecodePng(LPBMPFILE pBmp,BOOL bPalette)
 	}
 
 quit:
-	if (pbyImage != NULL)					// buffer for PNG image allocated
-	{
-		free(pbyImage);						// free PNG image data
-	}
+	free(pbyImage);							// free allocated PNG image data
 	return hBitmap;
 }
 

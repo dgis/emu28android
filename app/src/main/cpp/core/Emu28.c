@@ -13,7 +13,7 @@
 #include "kml.h"
 #include "debugger.h"
 
-#define VERSION   "1.37"
+#define VERSION   "1.38"
 
 #ifdef _DEBUG
 LPCTSTR szNoTitle = _T("Emu28 ")_T(VERSION)_T(" Debug");
@@ -1573,6 +1573,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	MSG msg;
 	WNDCLASS wc;
 	ATOM classAtom;
+	WSADATA wsd;
 	RECT rectWindow;
 	HACCEL hAccel;
 	DWORD dwThreadId;
@@ -1587,16 +1588,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 
 	hApp = hInst;
-	#if defined _UNICODE
-	{
-		ppArgv = (LPCTSTR*) CommandLineToArgvW(GetCommandLine(),&nArgc);
-	}
-	#else
-	{
-		nArgc = __argc;						// no. of command line arguments
-		ppArgv = (LPCTSTR*) __argv;			// command line arguments
-	}
-	#endif
+	nArgc = __argc;							// no. of command line arguments
+	ppArgv = __targv;						// command line arguments
 
 	if(!QueryPerformanceFrequency(&lFreq))	// init high resolution counter
 	{
@@ -1690,7 +1683,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 		// SetProcessInformation() is available since Windows 8, PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION since Windows 11
 		LPFN_SPI fnSetProcessInformation = (LPFN_SPI)GetProcAddress(hmKernel32, "SetProcessInformation");
 
-		if (fnSetProcessInformation != NULL)			// running on Windows 8 or later 
+		if (fnSetProcessInformation != NULL)			// running on Windows 8 or later
 		{
 			PROCESS_POWER_THROTTLING_STATE Ppts;
 
@@ -1831,6 +1824,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nC
 	if (NewDocument()) SetWindowTitle(_T("Untitled"));
 
 start:
+	VERIFY(WSAStartup(MAKEWORD(1,1),&wsd) == 0);
+
 	if (bStartupBackup) SaveBackup();		// make a RAM backup at startup
 	if (pbyRom) SwitchToState(SM_RUN);
 
@@ -1846,6 +1841,8 @@ start:
 			DispatchMessage(&msg);
 		}
 	}
+
+	WSACleanup();							// cleanup network stack
 
 	// clean up DDE server
 	DdeNameService(idDdeInst, hszService, NULL, DNS_UNREGISTER);

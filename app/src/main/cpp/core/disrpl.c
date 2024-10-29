@@ -543,6 +543,7 @@ static BOOL DoArry(DWORD *pdwAddr,String *str,UINT *pnLevel)
 	// this assert also fail on illegal objects
 	_ASSERT(dwObjStart + dwLength == *pdwAddr);
 	return FALSE;
+	UNREFERENCED_PARAMETER(dwLength);
 }
 
 static BOOL DoLnkArry(DWORD *pdwAddr,String *str,UINT *pnLevel)
@@ -1195,44 +1196,44 @@ static struct ObjHandler
 	DWORD	dwType;							// calculator type (RPL_P1 = all)
 } ObjDecode[] =
 {
-	_T("DOBINT"),		DoBint,			RPL_P1,		// System Binary
-	_T("DOREAL"),		DoReal,			RPL_P1,		// Real
-	_T("DOEREL"),		DoERel,			RPL_P1,		// Long Real
-	_T("DOCMP"),		DoCmp,			RPL_P1,		// Complex
-	_T("DOECMP"),		DoECmp,			RPL_P1,		// Long Complex
-	_T("DOCHAR"),		DoChar,			RPL_P1,		// Character
-	_T("DOARRY"),		DoArry,			RPL_P1,		// Array
-	_T("DOLNKARRY"),	DoLnkArry,		RPL_P1,		// Linked Array
-	_T("DOCSTR"),		DoCStr,			RPL_P1,		// String
-	_T("DOHSTR"),		DoHxs,			RPL_P1,		// Binary Integer
-	_T("DOHXS"),		DoHxs,			RPL_P1,		// Binary Integer
-	_T("DOLIST"),		DoList,			RPL_P1,		// List
-	_T("DOSYMB"),		DoSymb,			RPL_P1,		// Algebraic
-	_T("DOCOL"),		DoCol,			RPL_P1,		// Program
-	_T("DOCODE"),		DoCode,			RPL_P1,		// Code
-	_T("DOIDNT"),		DoIdnt,			RPL_P1,		// Global Name
-	_T("DOLAM"),		DoLam,			RPL_P1,		// Local Name
-	_T("DOROMP"),		DoRomp,			RPL_P1,		// XLIB Name
-	_T("SEMI"),			Semi,			RPL_P1,		// SEMI
-	_T("DORRP"),		DoRrp,			RPL_P2,		// Directory
-	_T("DOEXT"),		DoExt,			RPL_P2,		// Reserved or Unit (HP48 and later)
-	_T("DOTAG"),		DoTag,			RPL_P3,		// Tagged
-	_T("DOGROB"),		DoGrob,			RPL_P3,		// Graphic
-	_T("DOLIB"),		DoLib,			RPL_P3,		// Library
-	_T("DOBAK"),		DoBak,			RPL_P3,		// Backup
-	_T("DOEXT0"),		DoExt0,			RPL_P3,		// Library Data
-	_T("DOEXT1"),		DoExt1,			RPL_P3,		// Ext1 or ACcess PoinTeR
-	_T("DOACPTR"),		DoExt1,			RPL_P3,		// Ext1 or ACcess PoinTeR
-	_T("DOEXT2"),		DoExt2,			RPL_P3,		// Reserved 1, Font (HP49G)
-	_T("DOEXT3"),		DoExt3,			RPL_P3,		// Reserved 2
-	_T("DOEXT4"),		DoExt4,			RPL_P3,		// Reserved 3
-	_T("DOINT"),		DoZint,			RPL_P5,		// Infinite Precision Integers
-	_T("DOLNGREAL"),	DoLngReal,		RPL_P5,		// Precision Real
-	_T("DOLNGCMP"),		DoLngCmp,		RPL_P5,		// Precision Complex
-	_T("DOFLASHP"),		DoFlashPtr,		RPL_P5,		// Flash Pointer
-	_T("DOAPLET"),		DoAplet,		RPL_P5,		// Aplet
-	_T("DOMINIFONT"),	DoMinifont,		RPL_P5,		// Mini Font
-	_T("DOMATRIX"),		DoMatrix,		RPL_P5,		// Symbolic matrix
+	{ _T("DOBINT"),		DoBint,			RPL_P1 },	// System Binary
+	{ _T("DOREAL"),		DoReal,			RPL_P1 },	// Real
+	{ _T("DOEREL"),		DoERel,			RPL_P1 },	// Long Real
+	{ _T("DOCMP"),		DoCmp,			RPL_P1 },	// Complex
+	{ _T("DOECMP"),		DoECmp,			RPL_P1 },	// Long Complex
+	{ _T("DOCHAR"),		DoChar,			RPL_P1 },	// Character
+	{ _T("DOARRY"),		DoArry,			RPL_P1 },	// Array
+	{ _T("DOLNKARRY"),	DoLnkArry,		RPL_P1 },	// Linked Array
+	{ _T("DOCSTR"),		DoCStr,			RPL_P1 },	// String
+	{ _T("DOHSTR"),		DoHxs,			RPL_P1 },	// Binary Integer
+	{ _T("DOHXS"),		DoHxs,			RPL_P1 },	// Binary Integer
+	{ _T("DOLIST"),		DoList,			RPL_P1 },	// List
+	{ _T("DOSYMB"),		DoSymb,			RPL_P1 },	// Algebraic
+	{ _T("DOCOL"),		DoCol,			RPL_P1 },	// Program
+	{ _T("DOCODE"),		DoCode,			RPL_P1 },	// Code
+	{ _T("DOIDNT"),		DoIdnt,			RPL_P1 },	// Global Name
+	{ _T("DOLAM"),		DoLam,			RPL_P1 },	// Local Name
+	{ _T("DOROMP"),		DoRomp,			RPL_P1 },	// XLIB Name
+	{ _T("SEMI"),		Semi,			RPL_P1 },	// SEMI
+	{ _T("DORRP"),		DoRrp,			RPL_P2 },	// Directory
+	{ _T("DOEXT"),		DoExt,			RPL_P2 },	// Reserved or Unit (HP48 and later)
+	{ _T("DOTAG"),		DoTag,			RPL_P3 },	// Tagged
+	{ _T("DOGROB"),		DoGrob,			RPL_P3 },	// Graphic
+	{ _T("DOLIB"),		DoLib,			RPL_P3 },	// Library
+	{ _T("DOBAK"),		DoBak,			RPL_P3 },	// Backup
+	{ _T("DOEXT0"),		DoExt0,			RPL_P3 },	// Library Data
+	{ _T("DOEXT1"),		DoExt1,			RPL_P3 },	// Ext1 or ACcess PoinTeR
+	{ _T("DOACPTR"),	DoExt1,			RPL_P3 },	// Ext1 or ACcess PoinTeR
+	{ _T("DOEXT2"),		DoExt2,			RPL_P3 },	// Reserved 1, Font (HP49G)
+	{ _T("DOEXT3"),		DoExt3,			RPL_P3 },	// Reserved 2
+	{ _T("DOEXT4"),		DoExt4,			RPL_P3 },	// Reserved 3
+	{ _T("DOINT"),		DoZint,			RPL_P5 },	// Infinite Precision Integers
+	{ _T("DOLNGREAL"),	DoLngReal,		RPL_P5 },	// Precision Real
+	{ _T("DOLNGCMP"),	DoLngCmp,		RPL_P5 },	// Precision Complex
+	{ _T("DOFLASHP"),	DoFlashPtr,		RPL_P5 },	// Flash Pointer
+	{ _T("DOAPLET"),	DoAplet,		RPL_P5 },	// Aplet
+	{ _T("DOMINIFONT"),	DoMinifont,		RPL_P5 },	// Mini Font
+	{ _T("DOMATRIX"),	DoMatrix,		RPL_P5 },	// Symbolic matrix
 };
 
 static BOOL (*Getfp(LPCTSTR lpszObject))(DWORD *,String *,UINT *)

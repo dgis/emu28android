@@ -310,6 +310,7 @@ extern BOOL  SendByteUdp(BYTE byData);
 
 // Stack.c
 extern BOOL    bDetectClpObject;
+extern BOOL    bLocaleDecimalPoint;
 extern LRESULT OnStackCopy(VOID);
 extern LRESULT OnStackPaste(VOID);
 

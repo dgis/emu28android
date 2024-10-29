@@ -47,6 +47,11 @@ LINKS
 
 CHANGES
 
+Version 1.6 (2024-10-29)
+
+- Update from the original source code Emu28 version 1.38 from Christoph Gießelink.
+
+
 Version 1.5 (2024-06-16)
 
 - Update from the original source code Emu28 version 1.37 from Christoph Gießelink.
