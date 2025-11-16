@@ -13,7 +13,7 @@
 #include "kml.h"
 #include "debugger.h"
 
-#define VERSION   "1.38"
+#define VERSION   "1.39"
 
 #ifdef _DEBUG
 LPCTSTR szNoTitle = _T("Emu28 ")_T(VERSION)_T(" Debug");
@@ -1198,7 +1198,7 @@ static INT_PTR CALLBACK Disasm(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			// test if valid hex address
 			for (i = 0; i < (LONG) lstrlen(szAddress); ++i)
 			{
-				if (_istxdigit(szAddress[i]) == FALSE)
+				if (_istxdigit((_TUCHAR) szAddress[i]) == FALSE)
 					return FALSE;
 			}
 			dwAddress = _tcstoul(szAddress,NULL,16);

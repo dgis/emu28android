@@ -15,11 +15,11 @@ if (keystorePropertiesFile.exists()) {
     println("""
             The keystore.properties file is not found, so, you will not be able to install an unsigned APK in an Android device.
             Please, in the root folder, create a keystore.jks file with the command:
-
+            
             keytool -genkey -keystore ./keystore.jks -keyalg RSA -validity 9125 -alias key0
-
+            
             and create the file ./keystore.properties , with the following properties:
-
+            
             storeFile=../keystore.jks
             storePassword=myPassword
             keyAlias=key0
@@ -29,15 +29,20 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace 'org.emulator.twenty.eight'
-    compileSdk 34
+    compileSdkVersion 'android-36.1'
     defaultConfig {
         applicationId "org.emulator.twenty.eight"
         minSdk 21
-        targetSdk 34
-        versionCode 9
-        versionName "1.6"
+        targetSdk 36
+        versionCode 10
+        versionName "1.7"
         setProperty("archivesBaseName", "Emu28-v$versionName")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake {
+                cppFlags '-std=c++11 -fpermissive -Wno-error=incompatible-pointer-types'
+            }
+        }
     }
 
     if (canSign) {
@@ -74,20 +79,21 @@ android {
             path file('CMakeLists.txt')
         }
     }
-    ndkVersion '25.1.8937393'
+    ndkVersion '29.0.14033849 rc4'
+    buildToolsVersion '36.1.0'
 }
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'androidx.appcompat:appcompat:1.7.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
+    implementation 'com.google.android.material:material:1.13.0'
     implementation 'androidx.preference:preference:1.2.1'
-    implementation 'androidx.documentfile:documentfile:1.0.1'
-    implementation 'androidx.test.espresso:espresso-contrib:3.5.1'
+    implementation 'androidx.documentfile:documentfile:1.1.0'
+    implementation 'androidx.test.espresso:espresso-contrib:3.7.0'
     testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test:runner:1.5.2'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-    androidTestImplementation 'androidx.test:rules:1.5.0'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test:runner:1.7.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
+    androidTestImplementation 'androidx.test:rules:1.7.0'
+    androidTestImplementation 'androidx.test.ext:junit:1.3.0'
 }

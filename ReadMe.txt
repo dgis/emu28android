@@ -47,6 +47,13 @@ LINKS
 
 CHANGES
 
+Version 1.7 (2025-11-15)
+
+- Updated source code with Emu28 version 1.39.
+- Fix new UI constraints with Android 15.
+- Increase Haptic feedback max duration.
+
+
 Version 1.6 (2024-10-29)
 
 - Update from the original source code Emu28 version 1.38 from Christoph Gießelink.
