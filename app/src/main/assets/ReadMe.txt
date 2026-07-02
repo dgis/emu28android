@@ -47,6 +47,11 @@ LINKS
 
 CHANGES
 
+Version 1.9 (2026-07-02)
+
+- Improve sound engine that fix CPU slowdown issue.
+
+
 Version 1.8 (2025-11-21)
 
 - Fix the settings "Hide the status/navigations bar".
