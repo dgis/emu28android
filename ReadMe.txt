@@ -47,7 +47,7 @@ LINKS
 
 CHANGES
 
-Version 1.9 (2026-07-02)
+Version 1.9.1 (2026-07-02)
 
 - Improve sound engine that fix CPU slowdown issue.
 
