@@ -47,6 +47,12 @@ LINKS
 
 CHANGES
 
+Version 2.0 (2026-09-XX)
+
+- Fix status bar and navigation bar colors (white on white) issue in light mode.
+- Update based on the original source code of Emu28 version 1.40 by Christoph Gießelink.
+
+
 Version 1.9.1 (2026-07-02)
 
 - Improve sound engine that fix CPU slowdown issue.
