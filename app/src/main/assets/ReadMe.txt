@@ -47,10 +47,11 @@ LINKS
 
 CHANGES
 
-Version 2.0 (2026-09-XX)
+Version 2.0 (2026-09-26)
 
 - Fix status bar and navigation bar colors (white on white) issue in light mode.
 - Update based on the original source code of Emu28 version 1.40 by Christoph Gießelink.
+- Add the possibility to use the Android virtual keyboard.
 
 
 Version 1.9.1 (2026-07-02)
